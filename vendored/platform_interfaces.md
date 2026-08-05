@@ -1,6 +1,6 @@
 # Platform interfaces
 
-The app targets 64-bit Linux `amd64` and `arm64`. Docker/Compose packages it; bind mounts supply Codex state, the absolute identical-path workspace root, and app data. Docker build arguments create the container user with host-selected `PUID:PGID`; Compose runs with the same numeric identity and uses `/data/home` as writable runtime `HOME`. This is exercised by CI on `amd64` but still needs target-Pi validation.
+The app targets 64-bit Linux `amd64` and `arm64`. Docker/Compose packages it; bind mounts supply Codex state, the absolute identical-path workspace root, and app data. Docker build arguments create the container user with host-selected `PUID:PGID`; Compose runs with the same numeric identity and uses `/data/home` as writable runtime `HOME`. CI exercises native `amd64` and QEMU-emulated `linux/arm64`, including the bundled Codex version and degraded HTTP service; actual target-Pi validation is still required.
 
 Primary references:
 

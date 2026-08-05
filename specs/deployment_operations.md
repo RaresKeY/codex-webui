@@ -12,4 +12,4 @@ Git is authoritative for code/docs. Google Drive is a convenience mirror and bac
 
 - Confirm the `linux/arm64` image on the target Pi hardware; QEMU CI does not validate Pi kernel, storage, thermal, or sustained-load behavior.
 - Drive sync/conflict handling and automated backup/restore are not app features yet.
-- Add immutable release metadata, rollback automation, and multi-architecture tests.
+- Add immutable release metadata, rollback automation, and target-hardware performance/thermal regression tests.

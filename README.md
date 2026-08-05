@@ -52,6 +52,6 @@ Follow [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md). This a
 
 ## Gaps
 
-- Project edit/delete, task edit/delete/history, richer image metadata, and several settings actions remain future work.
+- Project edit/delete, task edit/delete/history, richer image metadata, and advanced runtime/settings management remain future work.
 - Host-toolchain execution needs the authenticated external App Server transport described in design; it is not an MVP feature.
 - Remote authentication, rate limiting, backup automation, and in-app updates remain staged work; use `tools/update.sh` for updates.
