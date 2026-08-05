@@ -6,7 +6,7 @@
 | --- | --- |
 | [codex_cli_app_server.md](codex_cli_app_server.md) | Codex CLI/App Server compatibility |
 | [runtime_dependencies.md](runtime_dependencies.md) | Runtime/build dependency policy |
-| [platform_interfaces.md](platform_interfaces.md) | Docker, Linux/Pi, Tailscale and Drive |
+| [platform_interfaces.md](platform_interfaces.md) | Docker, GHCR, Linux/Pi, Tailscale and Drive |
 
 Exact resolved versions come from lockfiles/image digests. Record the upstream primary source, use case, license identifier, and internal owning adapter.
 

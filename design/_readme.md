@@ -11,7 +11,7 @@
 | [workspace_experience.md](workspace_experience.md) | Right-side browser and safe editing evolution |
 | [automation_and_images.md](automation_and_images.md) | Scheduled work and image library roadmap |
 | [security_and_remote_access.md](security_and_remote_access.md) | Loopback, Tailscale, identity and containment |
-| [operations_and_sync.md](operations_and_sync.md) | Requested updates, backups and Drive mirror |
+| [operations_and_sync.md](operations_and_sync.md) | Requested updates, release images, backups and Drive mirror |
 
 Close design gaps only when decided; move implemented contracts into specs with verification.
 

@@ -9,7 +9,7 @@ services:
         CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
         PUID: ${PUID:-1000}
         PGID: ${PGID:-1000}
-    image: codex-webui:${APP_VERSION:-0.1.0}
+    image: ${CODEX_WEBUI_IMAGE:-codex-webui}:${CODEX_WEBUI_IMAGE_TAG:-0.1.0}
     restart: unless-stopped
     init: true
     user: "${PUID:-1000}:${PGID:-1000}"
