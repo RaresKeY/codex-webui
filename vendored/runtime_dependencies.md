@@ -6,9 +6,12 @@ Distributed dependencies use committed lockfiles or immutable digests. `backend/
 
 The runtime image is based on `python:3.12-slim` and copies Node from `node:22-bookworm-slim`; build stages and apt packages are not pinned to immutable digests.
 
+GitHub Actions uses `actions/checkout`, language setup actions, and Docker's QEMU, Buildx, metadata, login, and build/push actions. The GHCR publishing job grants `packages: write` only at that job boundary and authenticates with the repository-scoped `GITHUB_TOKEN`; these action references currently track major-version tags rather than immutable commits.
+
 Lockfiles are version truth; this note records rationale; `THIRD_PARTY_NOTICES.md` carries notices. Python owns orchestration. Native dependencies need a real library requirement or benchmark and both architectures or a fallback.
 
 ## Gaps
 
 - Hash-lock Python production dependencies separately from tests and pin base images/distro packages appropriately.
 - Generate the complete transitive version/license inventory and add vulnerability, lock-integrity, and architecture checks.
+- Pin GitHub Actions to reviewed commit SHAs before treating the publishing workflow as a hardened release pipeline.

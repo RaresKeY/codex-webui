@@ -17,10 +17,12 @@ fi
 CONFIGURED_WORKSPACES=
 CONFIGURED_UID=
 CONFIGURED_GID=
+CONFIGURED_IMAGE=
 if [ -f "$ROOT/.env" ]; then
   CONFIGURED_WORKSPACES=$(sed -n 's/^CODEX_WORKSPACES=//p' "$ROOT/.env" | tail -n 1)
   CONFIGURED_UID=$(sed -n 's/^PUID=//p' "$ROOT/.env" | tail -n 1)
   CONFIGURED_GID=$(sed -n 's/^PGID=//p' "$ROOT/.env" | tail -n 1)
+  CONFIGURED_IMAGE=$(sed -n 's/^CODEX_WEBUI_IMAGE=//p' "$ROOT/.env" | tail -n 1)
 fi
 WORKSPACE_ROOT=${CODEX_WORKSPACES:-${CONFIGURED_WORKSPACES:-$DEFAULT_WORKSPACES}}
 case "$WORKSPACE_ROOT" in
@@ -37,7 +39,12 @@ if [ "$RUN_UID" = "0" ] || [ "$RUN_GID" = "0" ]; then
   exit 1
 fi
 
-mkdir -p "$ROOT/data/home" "$WORKSPACE_ROOT"
+mkdir -p "$ROOT/data/home" "$WORKSPACE_ROOT" "$HOME/.codex"
+if [ ! -w "$HOME/.codex" ]; then
+  printf '%s\n' "Codex state directory is not writable: $HOME/.codex" >&2
+  printf '%s\n' 'Fix its ownership for this non-root user before starting the container.' >&2
+  exit 1
+fi
 NEW_ENV=0
 if [ ! -f "$ROOT/.env" ]; then
   cp "$ROOT/.env.example" "$ROOT/.env"
@@ -52,7 +59,13 @@ else
   printf '\nCODEX_WORKSPACES=%s\n' "$WORKSPACE_ROOT" >> "$ROOT/.env"
 fi
 
-docker compose --project-directory "$ROOT" up --detach --build
+IMAGE_NAME=${CODEX_WEBUI_IMAGE:-${CONFIGURED_IMAGE:-codex-webui}}
+if [ "$IMAGE_NAME" = "codex-webui" ]; then
+  docker compose --project-directory "$ROOT" up --detach --build
+else
+  docker compose --project-directory "$ROOT" pull web
+  docker compose --project-directory "$ROOT" up --detach --no-build --remove-orphans web
+fi
 docker compose --project-directory "$ROOT" ps
 
 printf '\nCodex Web UI: http://127.0.0.1:%s\n' "${CODEX_WEBUI_PORT:-8765}"
