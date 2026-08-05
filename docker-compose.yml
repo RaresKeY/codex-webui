@@ -1,0 +1,47 @@
+name: codex-webui
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-0.1.0}
+        CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    image: codex-webui:${APP_VERSION:-0.1.0}
+    restart: unless-stopped
+    init: true
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      # ./data is created for PUID:PGID by bootstrap, so HOME remains writable
+      # even when the runtime UID differs from the image's build-time UID.
+      HOME: /data/home
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
+      CODEX_WEBUI_CODEX_COMMAND: /usr/local/bin/codex app-server
+      CODEX_HOME: /home/codex/.codex
+      CODEX_WEBUI_DATA_DIR: /data
+      # Preserve Codex rollout cwd values by mounting the workspace at the
+      # identical absolute path inside and outside the container.
+      CODEX_WEBUI_WORKSPACE_ROOT: ${CODEX_WORKSPACES:?Set CODEX_WORKSPACES to an absolute host path}
+      CODEX_WEBUI_FRONTEND_DIST: /app/frontend/dist
+      CODEX_WEBUI_APPROVAL_POLICY: ${DEFAULT_APPROVAL_POLICY:-on-request}
+      CODEX_WEBUI_SANDBOX: ${DEFAULT_SANDBOX:-workspace-write}
+      CODEX_WEBUI_ALLOWED_HOSTS: ${CODEX_WEBUI_ALLOWED_HOSTS:-127.0.0.1,localhost,[::1]}
+      CODEX_WEBUI_ALLOWED_ORIGINS: ${CODEX_WEBUI_ALLOWED_ORIGINS:-http://127.0.0.1:8765,http://localhost:8765}
+      CODEX_WEBUI_UPDATE_COMMAND: ${CODEX_WEBUI_UPDATE_COMMAND:-}
+    ports:
+      - "${CODEX_WEBUI_BIND:-127.0.0.1}:${CODEX_WEBUI_PORT:-8765}:8000"
+    volumes:
+      - ${HOME}/.codex:/home/codex/.codex:rw
+      - type: bind
+        source: ${CODEX_WORKSPACES:?Set CODEX_WORKSPACES to an absolute host path}
+        target: ${CODEX_WORKSPACES:?Set CODEX_WORKSPACES to an absolute host path}
+        bind:
+          create_host_path: true
+      - ./data:/data:rw
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
