@@ -36,4 +36,4 @@ Run `./tools/validate.sh` for backend pytest, a clean frontend install/build, li
 
 ## Gaps
 
-- Add browser automation, live Codex smoke, target-ARM, release, and versioned migration commands.
+- Add browser automation, live Codex smoke, target-Pi hardware, release, and versioned migration commands.
