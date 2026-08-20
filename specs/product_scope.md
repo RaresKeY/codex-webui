@@ -1,16 +1,36 @@
 # Product scope
 
-Codex Web UI is a single-operator, self-hosted browser interface for Codex on Linux. The first deployment is same-device loopback access. It organizes local Codex conversations into projects and connects each conversation to one configured workspace.
+## Status
 
-The React frontend implements the three-pane shell and project, schedule, image, and settings screens in `frontend/src/App.tsx`. `frontend/src/api.ts` adapts canonical backend responses into UI types. Live behavior includes project creation and conversation assignment; authoritative debounced conversation search with recency sorting; thread history/resume/turns; delta and context-usage merging; pending approvals; lazy workspace browsing and text editing; task creation/toggle/run-now; image import/list/search/delete; nested usage display; reload-based reconnect; health diagnostics; and current-bootstrap JSON export. Approval cards enter a sending state and resolve only after the backend accepts the response; a failed POST leaves the request pending, shows an error, and allows retry. Demo data is used only when initial bootstrap establishes demo mode; live history/file failures show error states.
+Partial local Mac client MVP.
 
-The FastAPI backend currently provides health/bootstrap, Codex threads/turns/resume/fork/archive, WebSocket events, pending approvals, account/models/usage, project metadata, settings, workspace tree/read/write, PNG/JPEG/GIF/WebP upload/list/delete, UTC interval/cron tasks, and a gated update-command endpoint. Current source is `backend/app/main.py` with focused services in the adjacent modules.
+## Source Sync
 
-Codex remains authoritative for execution and native conversation continuation. SQLite stores projects with validated workspace-relative roots, thread-to-project/pin metadata, settings, and schedules. Images are app-owned files; interactive transcripts/runs remain Codex-owned. Transcript replay must never masquerade as resumption.
+- Product UI: `frontend/src/App.tsx`, `frontend/src/context-tools.ts`, and `frontend/src/styles.css`.
+- Browser behavior: `frontend/src/api.ts` and `frontend/src/realtime.ts`.
+- Service surface: `backend/app/main.py`.
+- Local launch: `tools/run-mac.sh`.
 
-Bootstrap non-goals include public hosting, multi-user collaboration, replacing Codex auth/policy, unrestricted terminal access, two-way cloud conflict resolution, and silent self-update.
+## Behavior
+
+Codex Web UI is a single-operator browser client for the Codex CLI installed on the same Mac. It organizes native Codex threads into local projects while preserving upstream thread identity and host workspace paths.
+
+The desktop shell is an explicit named grid: a stable application rail, project/conversation navigation, the flexible primary conversation, and an independently collapsible right context panel. The named areas keep the transcript centered and prevent an optional tool from taking the primary content column.
+
+The UI provides authoritative thread search/list/read/create/resume, live agent/reasoning/command/file streams, command and file approvals, context usage, workspace browsing/editing, project organization, schedules, images, and settings. Sending a prompt immediately marks its conversation and open surface as active; the waiting card remains before the first assistant chunk, transcript deltas grow one assistant message, and authoritative completed/failed/interrupted events remove the turn-level indicators. Command/file cards keep their own item-level spinner. Auto-scroll follows only while the reader remains near the bottom.
+
+The context panel uses a shared tool registry: Outputs, read-only thread background processes, related Side chats, Explorer, and bounded Git Changes are functional. Browser remains a visible planned surface because the installed public schema has no browser-control method; it does not call an invented or Desktop-private API. A public WebRTC voice adapter exists, but the microphone is enabled only after the companion verifies the per-thread CLI feature, compatible auth, and voices. The Mac launcher enables the installed CLI's supported process-scoped realtime feature; a read-only probe then verifies that the reused ChatGPT login and voice inventory satisfy those checks without starting a voice call or exposing credentials to the browser.
+
+At widths of 1000px or less, the conversation-navigation and context drawers are mutually exclusive and close when a main view is selected. Entering the narrow layout closes both drawers so the active chat remains visible.
+
+The companion reuses the existing Codex login and host toolchain. It does not alter, inject into, or automate the Codex desktop app. Bootstrap non-goals include public hosting, multi-user collaboration, replacing Codex authentication/policy, unrestricted terminal endpoints, two-way cloud conflict resolution, and silent self-update.
+
+## Verification
+
+Backend and frontend unit/integration tests cover the implemented service/UI adapters, lifecycle reducer, and context-tool registry. The opt-in live smoke covers native thread creation and a denied approval without a workspace or config change. Browser-controlled live checks verify named desktop order, context-tool switching, panel collapse, the production build at desktop and narrow layouts, capability-gated voice, provisional-chat hydration, waiting-before-output, growing response text, de-duplication, and terminal indicator cleanup.
 
 ## Gaps
 
-- Project edit/delete, schedule edit/delete/history, image metadata/tags, and advanced runtime/settings mutation remain incomplete.
-- Authentication, remote multi-user semantics, project portability, and browser-level accessibility evidence remain incomplete.
+- Add durable browser regression automation, broader accessibility evidence, and real microphone/speaker voice-call evidence; capability discovery alone does not prove end-to-end media succeeds for the account and network.
+- Decide whether native Dock/menu-bar packaging is product scope or whether localhost + browser remains the client shell.
+- Project/schedule/image lifecycle depth remains incomplete.

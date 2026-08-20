@@ -54,12 +54,14 @@ class CodexAppServerClient:
         argv: list[str],
         enabled: bool = True,
         line_limit: int = 32 * 1024 * 1024,
+        experimental_api: bool = True,
     ) -> None:
         if line_limit < 1024:
             raise ValueError("line_limit must be at least 1024 bytes")
         self.argv = argv
         self.enabled = enabled
         self.line_limit = line_limit
+        self.experimental_api = experimental_api
         self.process: asyncio.subprocess.Process | None = None
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
@@ -70,6 +72,7 @@ class CodexAppServerClient:
         self._next_id = 1
         self.last_error: str | None = None
         self.server_info: dict[str, Any] | None = None
+        self.cli_version: str | None = None
 
     @property
     def available(self) -> bool:
@@ -82,6 +85,7 @@ class CodexAppServerClient:
         if self.available:
             return True
         try:
+            self.cli_version = await self._read_cli_version()
             self.process = await asyncio.create_subprocess_exec(
                 *self.argv,
                 stdin=asyncio.subprocess.PIPE,
@@ -99,7 +103,14 @@ class CodexAppServerClient:
                             "name": "codex-webui",
                             "title": "Codex WebUI",
                             "version": "0.1.0",
-                        }
+                        },
+                        # These fields are required by the installed 0.147
+                        # generated schema. Realtime methods are experimental;
+                        # this companion does not provide desktop attestation.
+                        "capabilities": {
+                            "experimentalApi": self.experimental_api,
+                            "requestAttestation": False,
+                        },
                     },
                 ),
                 timeout=15,
@@ -327,6 +338,23 @@ class CodexAppServerClient:
                 logger.debug("drained %d bytes from codex app-server stderr", len(chunk))
         except asyncio.CancelledError:
             raise
+
+    async def _read_cli_version(self) -> str | None:
+        """Read the executable version without inspecting Codex state or config."""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                self.argv[0],
+                "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5)
+        except (OSError, asyncio.TimeoutError):
+            return None
+        if process.returncode != 0:
+            return None
+        value = stdout.decode(errors="replace").strip()
+        return value[:200] or None
 
     @staticmethod
     async def _terminate_process(process: asyncio.subprocess.Process) -> None:

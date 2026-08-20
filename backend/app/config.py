@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
 import shlex
 from pathlib import Path
+from typing import Annotated, Literal
 
 from pydantic import AliasChoices, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 APPROVAL_POLICY_ALIASES = {
@@ -40,7 +40,7 @@ def normalize_sandbox(value: str) -> str:
 def sandbox_policy(mode: str, writable_root: Path | None = None) -> dict[str, object]:
     normalized = normalize_sandbox(mode)
     if normalized == "read-only":
-        return {"type": "readOnly"}
+        return {"type": "readOnly", "networkAccess": False}
     if normalized == "danger-full-access":
         return {"type": "dangerFullAccess"}
     return {
@@ -49,6 +49,8 @@ def sandbox_policy(mode: str, writable_root: Path | None = None) -> dict[str, ob
         # capabilities, so do not implicitly grant the entire workspace mount.
         "writableRoots": [],
         "networkAccess": False,
+        "excludeTmpdirEnvVar": False,
+        "excludeSlashTmp": False,
     }
 
 
@@ -93,7 +95,7 @@ class Settings(BaseSettings):
     update_command: str | None = None
     max_file_bytes: int = 2 * 1024 * 1024
     max_image_bytes: int = 20 * 1024 * 1024
-    allowed_origins: list[str] = Field(
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://127.0.0.1:8765",
             "http://localhost:8765",
@@ -104,8 +106,13 @@ class Settings(BaseSettings):
     # Starlette's TrustedHostMiddleware does not parse bracketed IPv6 hosts
     # correctly. Operators binding an IPv6/Tailscale name should explicitly set
     # the canonical DNS host through CODEX_WEBUI_ALLOWED_HOSTS.
-    allowed_hosts: list[str] = Field(default_factory=lambda: ["127.0.0.1", "localhost"])
+    allowed_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["127.0.0.1", "localhost"]
+    )
     max_protocol_line_bytes: int = 32 * 1024 * 1024
+    experimental_api: bool = True
+    realtime_feature_enabled: bool = False
+    runtime: Literal["localhost-companion", "container"] = "localhost-companion"
 
     @field_validator(
         "data_dir", "database_file", "image_directory", "frontend_dist", "workspace_root",
@@ -148,6 +155,15 @@ class Settings(BaseSettings):
         # CODEX_BIN is commonly configured as the executable only.
         if len(argv) == 1:
             argv.append("app-server")
+        has_realtime_override = any(
+            index > 0
+            and value == "realtime_conversation"
+            and argv[index - 1] in {"--enable", "--disable"}
+            for index, value in enumerate(argv)
+        )
+        if self.realtime_feature_enabled and not has_realtime_override and "app-server" in argv:
+            argv_index = argv.index("app-server")
+            argv[argv_index:argv_index] = ["--enable", "realtime_conversation"]
         return argv
 
 

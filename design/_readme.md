@@ -17,5 +17,5 @@ Close design gaps only when decided; move implemented contracts into specs with 
 
 ## Gaps
 
-- Validate the bootstrap/container/Codex adapter on the target Pi, then prioritize performance and remote-access milestones from that evidence.
+- Validate the Mac companion in automated browser/WebRTC flows and decide whether the optional container remains a supported product path.
 - Add user-tested interaction and accessibility findings.

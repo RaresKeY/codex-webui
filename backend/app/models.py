@@ -18,6 +18,7 @@ class ThreadStart(BaseModel):
     model: str | None = None
     approval_policy: str | None = None
     sandbox: str | None = None
+    ephemeral: bool = False
 
     @field_validator("approval_policy")
     @classmethod
@@ -64,6 +65,19 @@ class TurnSteer(BaseModel):
 
 class ApprovalResponse(BaseModel):
     response: dict[str, Any]
+
+
+class RealtimeStart(BaseModel):
+    sdp: str = Field(min_length=1, max_length=1_000_000)
+    voice: Literal[
+        "alloy", "arbor", "ash", "ballad", "breeze", "cedar", "coral", "cove",
+        "echo", "ember", "juniper", "maple", "marin", "sage", "shimmer", "sol",
+        "spruce", "vale", "verse",
+    ] | None = None
+    # The public App Server docs explicitly reject realtime v2 over WebRTC.
+    version: Literal["v1", "v3"] | None = None
+    model: str | None = None
+    include_startup_context: bool | None = None
 
 
 class ProjectCreate(BaseModel):

@@ -46,6 +46,8 @@ export const demoBootstrap: BootstrapPayload = {
   demo: true,
   codexVersion: 'Demo value',
   updatesEnabled: false,
+  realtimeVoice: false,
+  runtime: 'unknown',
 }
 
 export const demoEvents: StreamEvent[] = [

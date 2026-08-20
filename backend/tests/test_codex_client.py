@@ -124,3 +124,30 @@ async def test_subprocess_line_limit_fails_cleanly() -> None:
     assert await asyncio.wait_for(client.start(), timeout=5) is False
     assert client.last_error and "exceeded 65536 byte limit" in client.last_error
     assert not client.available
+
+
+@pytest.mark.asyncio
+async def test_initialize_opts_into_exact_experimental_capabilities() -> None:
+    script = r'''
+import json
+import sys
+import time
+
+message = json.loads(sys.stdin.readline())
+expected = {"experimentalApi": True, "requestAttestation": False}
+if message.get("method") != "initialize" or message.get("params", {}).get("capabilities") != expected:
+    print(json.dumps({"id": message.get("id"), "error": {"code": -32602, "message": "bad capabilities"}}), flush=True)
+    raise SystemExit(1)
+print(json.dumps({"id": message["id"], "result": {"userAgent": "fake", "codexHome": "/tmp", "platformFamily": "unix", "platformOs": "macos"}}), flush=True)
+json.loads(sys.stdin.readline())
+time.sleep(30)
+'''
+    client = CodexAppServerClient([sys.executable, "-u", "-c", script])
+    assert await asyncio.wait_for(client.start(), timeout=5) is True
+    assert client.server_info == {
+        "userAgent": "fake",
+        "codexHome": "/tmp",
+        "platformFamily": "unix",
+        "platformOs": "macos",
+    }
+    await client.stop()

@@ -15,6 +15,8 @@ def test_deployment_environment_aliases(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CODEX_BIN", "/usr/local/bin/codex")
     monkeypatch.setenv("DEFAULT_APPROVAL_POLICY", "never")
     monkeypatch.setenv("DEFAULT_SANDBOX", "readOnly")
+    monkeypatch.setenv("CODEX_WEBUI_ALLOWED_ORIGINS", "http://127.0.0.1:8765,http://localhost:8765")
+    monkeypatch.setenv("CODEX_WEBUI_ALLOWED_HOSTS", "127.0.0.1,localhost")
     settings = Settings(_env_file=None)
     assert settings.database_path == (tmp_path / "custom.sqlite3").resolve()
     assert settings.workspace_root == (tmp_path / "workspaces").resolve()
@@ -22,17 +24,58 @@ def test_deployment_environment_aliases(monkeypatch, tmp_path: Path) -> None:
     assert settings.codex_argv == ["/usr/local/bin/codex", "app-server"]
     assert settings.approval_policy == "never"
     assert settings.sandbox == "read-only"
+    assert settings.allowed_origins == [
+        "http://127.0.0.1:8765",
+        "http://localhost:8765",
+    ]
+    assert settings.allowed_hosts == ["127.0.0.1", "localhost"]
+    assert settings.realtime_feature_enabled is False
+    assert settings.runtime == "localhost-companion"
+
+
+def test_realtime_feature_flag_is_scoped_to_app_server_launch(monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_WEBUI_CODEX_COMMAND", "/usr/local/bin/codex app-server")
+    monkeypatch.setenv("CODEX_WEBUI_REALTIME_FEATURE_ENABLED", "true")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.codex_argv == [
+        "/usr/local/bin/codex",
+        "--enable",
+        "realtime_conversation",
+        "app-server",
+    ]
+
+
+def test_explicit_realtime_launch_override_is_not_duplicated() -> None:
+    settings = Settings(
+        codex_command="codex --disable realtime_conversation app-server",
+        realtime_feature_enabled=True,
+        _env_file=None,
+    )
+
+    assert settings.codex_argv == [
+        "codex",
+        "--disable",
+        "realtime_conversation",
+        "app-server",
+    ]
 
 
 def test_wire_enum_normalization_and_validation(tmp_path: Path) -> None:
     assert normalize_approval_policy("onRequest") == "on-request"
     assert normalize_sandbox("workspaceWrite") == "workspace-write"
-    assert sandbox_policy("read-only", tmp_path) == {"type": "readOnly"}
+    assert sandbox_policy("read-only", tmp_path) == {
+        "type": "readOnly",
+        "networkAccess": False,
+    }
     assert sandbox_policy("danger-full-access", tmp_path) == {"type": "dangerFullAccess"}
     assert sandbox_policy("workspace-write", tmp_path) == {
         "type": "workspaceWrite",
         "writableRoots": [],
         "networkAccess": False,
+        "excludeTmpdirEnvVar": False,
+        "excludeSlashTmp": False,
     }
     with pytest.raises(ValueError, match="approval"):
         normalize_approval_policy("always")

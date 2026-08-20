@@ -36,4 +36,4 @@ Run `./tools/validate.sh` for backend pytest, a clean frontend install/build, li
 
 ## Gaps
 
-- Add browser automation, live Codex smoke, target-Pi hardware, versioned release promotion, and versioned migration commands.
+- Add browser automation, real WebRTC audio evidence, target-Pi hardware, versioned release promotion, and versioned migration commands. The live Codex smoke is opt-in at `tools/smoke_app_server.py`.

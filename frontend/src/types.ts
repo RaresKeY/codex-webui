@@ -1,6 +1,33 @@
 export type View = 'chat' | 'projects' | 'schedules' | 'images' | 'settings'
 export type ConnectionState = 'connecting' | 'online' | 'demo' | 'offline'
 export type EventKind = 'message' | 'reasoning' | 'command' | 'file' | 'approval' | 'status'
+export type VoiceState = 'idle' | 'connecting' | 'live' | 'stopping' | 'error' | 'unsupported'
+export type TurnPhase = 'idle' | 'waiting' | 'streaming' | 'completed' | 'interrupted' | 'failed'
+
+export interface TurnLifecycle {
+  phase: TurnPhase
+  turnId?: string
+  requestId?: string
+  error?: string
+}
+
+export type TurnSignal =
+  | { kind: 'started'; turnId: string }
+  | { kind: 'activity'; turnId?: string }
+  | { kind: 'delta'; turnId?: string }
+  | { kind: 'error'; turnId?: string; message: string; willRetry: boolean }
+  | { kind: 'completed'; turnId: string; status: 'completed' | 'interrupted' | 'failed'; error?: string }
+
+export interface RealtimeCapability {
+  available: boolean
+  reason?: string
+}
+
+export type RealtimeSignal =
+  | { kind: 'sdp'; threadId: string; sdp: string }
+  | { kind: 'started'; threadId: string }
+  | { kind: 'closed'; threadId: string; reason?: string }
+  | { kind: 'error'; threadId: string; message: string }
 
 export interface Project {
   id: string
@@ -45,6 +72,27 @@ export interface WorkspaceFile {
   children?: WorkspaceFile[]
 }
 
+export interface BackgroundTerminal {
+  itemId: string
+  processId: string
+  command: string
+  cwd: string
+  osPid?: number
+  cpuPercent?: number
+  rssKb?: number
+}
+
+export interface BackgroundTerminals {
+  items: BackgroundTerminal[]
+  unavailableReason?: string
+}
+
+export interface WorkspaceChanges {
+  files: WorkspaceFile[]
+  repoRoot?: string
+  truncated?: boolean
+}
+
 export interface Schedule {
   id: string
   name: string
@@ -83,11 +131,21 @@ export interface BootstrapPayload {
   demo: boolean
   codexVersion?: string
   updatesEnabled: boolean
+  realtimeVoice: boolean
+  realtimeVoiceReason?: string
+  runtime: 'localhost-companion' | 'container' | 'unknown'
 }
 
 export interface LiveUpdate {
   event?: StreamEvent
+  turn?: TurnSignal
   contextPercent?: number
+  realtime?: RealtimeSignal
+}
+
+export interface ConversationSnapshot {
+  events: StreamEvent[]
+  turn: TurnLifecycle
 }
 
 export interface FileReadResult {

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import mimetypes
-import os
 import re
 import shutil
+import subprocess
 import sys
 import uuid
 from contextlib import asynccontextmanager
@@ -27,6 +27,7 @@ from .models import (
     FileWrite,
     ProjectCreate,
     ProjectUpdate,
+    RealtimeStart,
     ScheduledTaskCreate,
     ScheduledTaskUpdate,
     SettingValue,
@@ -48,6 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.codex_argv,
         enabled=settings.codex_enabled,
         line_limit=settings.max_protocol_line_bytes,
+        experimental_api=settings.experimental_api,
     )
     workspace = Workspace(settings.workspace_root, settings.max_file_bytes)
     scheduler = TaskScheduler(
@@ -129,11 +131,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "platform": sys.platform,
             "python": sys.version.split()[0],
+            "runtime": settings.runtime,
             "codex": {
                 "available": codex.available,
                 "command": settings.codex_argv[0] if settings.codex_argv else None,
                 "installed": bool(settings.codex_argv and shutil.which(settings.codex_argv[0])),
                 "server_info": codex.server_info,
+                "cli_version": codex.cli_version,
                 "error": codex.last_error,
                 "approval_policy": settings.approval_policy,
                 "sandbox": settings.sandbox,
@@ -142,12 +146,65 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "disk": {"total": disk.total, "used": disk.used, "free": disk.free},
         }
 
+    async def realtime_capability_payload(thread_id: str | None = None) -> dict[str, Any]:
+        """Report only realtime support that this public App Server can prove."""
+        if not codex.available:
+            return {"available": False, "reason": "Realtime voice is unavailable while the local Codex service is offline."}
+        if not settings.experimental_api or settings.runtime != "localhost-companion":
+            return {"available": False, "reason": "Realtime voice is not enabled for this local runtime."}
+        params: dict[str, Any] = {"limit": 100}
+        if thread_id:
+            params["threadId"] = thread_id
+        try:
+            features = await codex.request("experimentalFeature/list", params)
+        except CodexRPCError:
+            if not thread_id:
+                return {"available": False, "reason": "The installed Codex CLI could not verify realtime voice support."}
+            try:
+                features = await codex.request("experimentalFeature/list", {"limit": 100})
+            except CodexRPCError:
+                return {"available": False, "reason": "The installed Codex CLI could not verify realtime voice support."}
+        entries = features.get("data", []) if isinstance(features, dict) else []
+        realtime = next(
+            (entry for entry in entries if isinstance(entry, dict) and entry.get("name") == "realtime_conversation"),
+            None,
+        )
+        if not isinstance(realtime, dict) or realtime.get("enabled") is not True:
+            return {
+                "available": False,
+                "reason": "Realtime voice is disabled for this conversation in the installed Codex CLI.",
+            }
+        try:
+            account_result = await codex.request("account/read", {"refreshToken": False})
+        except CodexRPCError:
+            return {"available": False, "reason": "The installed Codex CLI could not verify realtime authentication."}
+        account = account_result.get("account") if isinstance(account_result, dict) else None
+        requires_openai_auth = (
+            account_result.get("requiresOpenaiAuth") if isinstance(account_result, dict) else None
+        )
+        if requires_openai_auth is True and not isinstance(account, dict):
+            return {
+                "available": False,
+                "reason": "Realtime voice requires a signed-in Codex account for this provider.",
+            }
+        try:
+            voices = await codex.request("thread/realtime/listVoices", {})
+        except CodexRPCError:
+            return {"available": False, "reason": "The installed Codex CLI rejected realtime voice discovery."}
+        voice_groups = voices.get("voices", {}) if isinstance(voices, dict) else {}
+        if not isinstance(voice_groups, dict) or not any(voice_groups.get(key) for key in ("v1", "v2")):
+            return {"available": False, "reason": "No realtime voices are available from the installed Codex CLI."}
+        return {"available": True}
+
     @app.get("/api/bootstrap")
     async def bootstrap() -> dict[str, Any]:
         """One round-trip for initial UI state, including degraded mode."""
         threads, models_result, usage_result = await asyncio.gather(
             list_threads(limit=25), models(), usage()
         )
+        thread_entries = threads.get("data", []) if isinstance(threads, dict) else []
+        first_thread = thread_entries[0] if thread_entries and isinstance(thread_entries[0], dict) else {}
+        voice_capability = await realtime_capability_payload(str(first_thread.get("id"))) if first_thread.get("id") else await realtime_capability_payload()
         return {
             "health": await health(),
             "system": await system_status(),
@@ -162,6 +219,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "features": {
                 "projects": True, "schedules": True, "images": True,
                 "workspaceWrite": True, "updates": bool(settings.update_command),
+                "realtimeVoice": voice_capability["available"],
+                "realtimeVoiceReason": voice_capability.get("reason"),
+                "hostCompanion": settings.runtime == "localhost-companion",
             },
         }
 
@@ -201,7 +261,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/threads/{thread_id}")
     async def read_thread(thread_id: str) -> Any:
-        return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": True})
+        try:
+            return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": True})
+        except CodexRPCError as exc:
+            if "not materialized yet" not in rpc_error_message(exc).casefold():
+                raise
+            # A public App Server thread has no rollout until its first user
+            # message. Metadata remains readable, but includeTurns is invalid.
+            return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
+
+    @app.get("/api/threads/{thread_id}/background-terminals")
+    async def background_terminals(thread_id: str) -> Any:
+        """Read the public, thread-scoped background-terminal inventory.
+
+        The companion intentionally exposes no matching shell-command or
+        process-spawn route. This is an activity monitor, not a terminal input.
+        """
+        params = {"threadId": thread_id, "limit": 100}
+        try:
+            result = await codex.request("thread/backgroundTerminals/list", params)
+        except CodexRPCError as exc:
+            if "thread not found" not in rpc_error_message(exc).casefold():
+                raise
+            try:
+                await codex.request("thread/resume", {"threadId": thread_id})
+            except CodexRPCError as resume_exc:
+                resume_message = rpc_error_message(resume_exc).casefold()
+                if "no rollout found" in resume_message:
+                    return {"data": [], "unavailableReason": "This new conversation has no background processes yet."}
+                if "already has an active writer" in resume_message:
+                    return {
+                        "data": [],
+                        "unavailableReason": (
+                            "Background process activity is owned by another local Codex session."
+                        ),
+                    }
+                raise
+            result = await codex.request("thread/backgroundTerminals/list", params)
+        return result if isinstance(result, dict) else {"data": result or []}
 
     @app.post("/api/threads", status_code=201)
     async def start_thread(body: ThreadStart) -> Any:
@@ -212,6 +309,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
         if body.model:
             params["model"] = body.model
+        if body.ephemeral:
+            params["ephemeral"] = True
         result = await codex.request("thread/start", params)
         if body.prompt:
             thread = result.get("thread", result) if isinstance(result, dict) else {}
@@ -232,7 +331,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             params["cwd"] = str(workspace.resolve(body.cwd, must_exist=True))
         if body.model:
             params["model"] = body.model
-        return await codex.request("thread/resume", params)
+        try:
+            return await codex.request("thread/resume", params)
+        except CodexRPCError as exc:
+            if "no rollout found for thread id" not in rpc_error_message(exc).casefold():
+                raise
+            # A just-created, loaded thread needs its first turn before it can
+            # be resumed. Confirm it still exists, then treat resume as a no-op.
+            return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
 
     @app.patch("/api/threads/{thread_id}/name")
     async def name_thread(thread_id: str, body: ThreadName) -> Any:
@@ -302,6 +408,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/threads/{thread_id}/turns/{turn_id}/interrupt")
     async def interrupt_turn(thread_id: str, turn_id: str) -> Any:
         return await codex.request("turn/interrupt", {"threadId": thread_id, "turnId": turn_id})
+
+    @app.get("/api/realtime/voices")
+    async def realtime_voices() -> Any:
+        return await codex.request("thread/realtime/listVoices", {})
+
+    @app.get("/api/threads/{thread_id}/realtime/capability")
+    async def realtime_capability(thread_id: str) -> dict[str, Any]:
+        return await realtime_capability_payload(thread_id)
+
+    @app.post("/api/threads/{thread_id}/realtime/start")
+    async def start_realtime(thread_id: str, body: RealtimeStart) -> Any:
+        params: dict[str, Any] = {
+            "threadId": thread_id,
+            "outputModality": "audio",
+            "transport": {"type": "webrtc", "sdp": body.sdp},
+        }
+        if body.voice:
+            params["voice"] = body.voice
+        if body.version:
+            params["version"] = body.version
+        if body.model:
+            params["model"] = body.model
+        if body.include_startup_context is not None:
+            params["includeStartupContext"] = body.include_startup_context
+        try:
+            return await codex.request("thread/realtime/start", params)
+        except CodexRPCError as exc:
+            message = rpc_error_message(exc).casefold()
+            if "high demand" in message or "temporarily unavailable" in message:
+                raise HTTPException(503, "Realtime voice is temporarily unavailable; try again later.") from None
+            if "api key auth" in message:
+                raise HTTPException(409, "Codex rejected realtime authentication for this conversation.") from None
+            if "does not support realtime conversation" in message:
+                raise HTTPException(409, "Realtime voice is not enabled for this Codex conversation.") from None
+            raise HTTPException(409, "Codex App Server rejected realtime voice for this conversation.") from None
+
+    @app.post("/api/threads/{thread_id}/realtime/stop")
+    async def stop_realtime(thread_id: str) -> Any:
+        try:
+            return await codex.request("thread/realtime/stop", {"threadId": thread_id})
+        except CodexRPCError as exc:
+            if "does not support realtime conversation" in rpc_error_message(exc).casefold():
+                return {"stopped": False, "reason": "unsupported"}
+            raise
 
     @app.websocket("/api/events")
     async def events(websocket: WebSocket) -> None:
@@ -398,6 +548,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "File not found") from None
         except (ValueError, IsADirectoryError, PermissionError) as exc:
             raise HTTPException(400, str(exc)) from None
+
+    @app.get("/api/workspace/changes")
+    async def workspace_changes(path: str = ".") -> Any:
+        try:
+            return await asyncio.to_thread(workspace.changes, path)
+        except UnsafePath as exc:
+            raise HTTPException(403, str(exc)) from None
+        except FileNotFoundError:
+            raise HTTPException(404, "Path not found") from None
+        except subprocess.TimeoutExpired:
+            raise HTTPException(504, "Git change inspection timed out") from None
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from None
+        except (ValueError, NotADirectoryError, PermissionError, OSError) as exc:
+            raise HTTPException(409, str(exc)) from None
 
     @app.put("/api/workspace/file")
     async def write_workspace_file(path: str, body: FileWrite) -> Any:
@@ -710,6 +875,12 @@ def event_is_for_thread(message: dict[str, Any], thread_id: str) -> bool:
     return isinstance(method, str) and method.startswith(("webui/", "account/"))
 
 
+def rpc_error_message(exc: CodexRPCError) -> str:
+    if isinstance(exc.error, dict) and isinstance(exc.error.get("message"), str):
+        return exc.error["message"]
+    return str(exc)
+
+
 def add_security_headers(response: Any) -> Any:
     response.headers.setdefault(
         "Content-Security-Policy",
@@ -720,6 +891,7 @@ def add_security_headers(response: Any) -> Any:
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "microphone=(self)")
     return response
 
 

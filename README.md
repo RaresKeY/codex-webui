@@ -1,86 +1,114 @@
 # Codex Web UI
 
-A self-hosted browser interface for Codex CLI on Linux. It is designed to run beside workspaces and Codex state on a Raspberry Pi or another Linux host, with same-device browser access first and Tailscale access later.
+A local Mac client for the open-source Codex CLI. A loopback-only companion owns one `codex app-server` subprocess, inherits the normal Codex login, serves the React client, and keeps the browser away from CLI state and subprocess control.
 
 Project memory is split deliberately:
 
 - [`specs/`](specs/_readme.md): current implemented behavior and verification.
 - [`design/`](design/_readme.md): desired current and future design.
-- [`vendored/`](vendored/_readme.md): external interfaces and dependencies. Licenses stay in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+- [`vendored/`](vendored/_readme.md): external interfaces and dependencies.
 
-The code is early-stage. Read the specs before treating a screen or endpoint as supported.
+## Mac quick start
 
-## Quick start
+Prerequisites:
 
-Prerequisites: Docker with Compose and at least one workspace directory. An existing host Codex login is reused when its state is file-backed; otherwise authenticate once from the running container.
+- macOS with Python 3;
+- Codex CLI installed and already signed in (`codex login` only if needed);
+- Node.js with npm or pnpm for the first frontend build (`brew install node` is one option).
+
+Start the client:
+
+```bash
+./tools/run-mac.sh
+```
+
+The launcher creates a project-local Python environment, builds the frontend, starts the companion on `http://127.0.0.1:8765`, and opens that address. App-owned data defaults to `~/Library/Application Support/Codex WebUI`; the workspace root defaults to this checkout's parent directory.
+
+The companion launches the host `codex app-server` over stdio without setting a replacement `CODEX_HOME`, so Codex resolves the same login and state as the CLI. It never copies credentials into the project or browser. It binds only to loopback and refuses a non-loopback host.
+
+When present, the launcher prefers the official standalone installation at `~/.local/bin/codex` over a copy bundled inside another desktop app. Update that installation with the official command:
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+Useful overrides:
+
+```bash
+CODEX_BIN=/absolute/path/to/codex \
+CODEX_WEBUI_WORKSPACE_ROOT=/Users/me/workspace \
+CODEX_WEBUI_PORT=8765 \
+CODEX_WEBUI_OPEN_BROWSER=0 \
+./tools/run-mac.sh
+```
+
+The Mac launcher enables the App Server's listed `realtime_conversation` feature only for its child process using Codex's documented `--enable` flag. Set `CODEX_WEBUI_REALTIME_FEATURE_ENABLED=false` to omit that launch override; no `config.toml` change is needed.
+
+Omit `CODEX_WEBUI_OPEN_BROWSER=0` when the launcher should open the localhost URL in the macOS default external browser. Set it to `0` when using Codex's in-app Browser or opening the page manually.
+
+## Implemented Codex surface
+
+- list, search, read, create, resume, name, archive, and fork native Codex threads;
+- start, steer, interrupt, and stream turns and item deltas;
+- inline command and file-change approvals with exact current decision values;
+- account, model, usage, and context-window reporting;
+- browser microphone/audio using the public experimental realtime protocol when the installed App Server reports it usable;
+- a contextual panel backed by Outputs, read-only background-terminal activity, related Codex threads, bounded workspace Explorer, and read-only Git changes. Browser remains visibly planned because it has no public App Server method.
+
+Realtime voice follows the App Server WebRTC flow: the browser creates the microphone track and `oai-events` data channel, sends its SDP offer through the companion using `thread/realtime/start`, receives `thread/realtime/sdp` over the existing thread event socket, and applies the answer to its `RTCPeerConnection`. The client selects documented WebRTC version `v3`; App Server version `v2` is deliberately rejected because the public protocol does not support it over WebRTC. The companion enables the listed experimental feature at launch, then requires the live App Server to confirm the feature, a suitable signed-in state when the provider requires one, and a non-empty voice catalog before enabling the microphone. ChatGPT-authenticated WebRTC remains inside App Server; no API key or OAuth material is sent to browser JavaScript.
+
+The UI also retains the existing project organization, schedule, image-library, usage, and workspace-browser features. Codex remains authoritative for authentication, execution, thread history, sandboxing, and approvals.
+
+## Protocol compatibility
+
+This pass was implemented and tested against the official standalone `codex-cli 0.147.0`. Generate that executable's complete public schema without touching configuration:
+
+```bash
+./tools/generate-app-server-schema.sh
+```
+
+Generated files go under ignored `tmp/app-server-schema/`. The small frontend type subset in `frontend/src/app-server-protocol.ts` records the exact version used for the implemented methods.
+
+Run the opt-in live smoke after signing in. It creates an ephemeral read-only thread, requests one command approval, denies it, verifies the command made no change, and compares the Codex `config.toml` digest before and after:
+
+```bash
+.venv/bin/python tools/smoke_app_server.py
+```
+
+Probe the launch-scoped realtime feature, signed-in state, and voice inventory without starting a realtime session or requesting microphone permission:
+
+```bash
+.venv/bin/python tools/probe_realtime_capability.py
+```
+
+## Development
+
+Install backend dependencies in a virtual environment, then run all checks:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt
+PYTHON_BIN=.venv/bin/python ./tools/validate.sh
+```
+
+Visible changes still need desktop and narrow-width browser checks until browser automation is added.
+
+## Optional Linux container
+
+The earlier Docker/Compose deployment remains available for Linux and Raspberry Pi work:
 
 ```bash
 ./tools/bootstrap.sh
 ```
 
-Run bootstrap as the non-root user who owns `~/.codex` and the workspaces. It refuses root, copies `.env.example` to `.env` on first run, records that user's `PUID`/`PGID`, creates writable data and Codex-state directories, chooses an absolute workspace root, then starts Compose. The default local image is built from source; a configured remote image is pulled instead. Open `http://127.0.0.1:8765`.
+It binds `127.0.0.1:8765`, mounts the selected workspace and file-backed Codex state, and runs Codex inside the container. That mode sees the container toolchain rather than the Mac host toolchain and is not the primary realtime-voice target. See [`specs/deployment_operations.md`](specs/deployment_operations.md) before using or publishing the container image.
 
-When this repository is directly inside a `RawProjects` directory, bootstrap defaults `CODEX_WORKSPACES` to that parent so sibling projects are available. Otherwise it defaults to the absolute path of this repository's `workspaces/` directory. Override it in `.env` with another absolute host path if needed.
+## Security
 
-Compose requires `CODEX_WORKSPACES` to be absolute and mounts it at the identical absolute path inside the container. This preserves the working-directory paths stored by host-side Codex sessions:
-
-```yaml
-volumes:
-  - ${HOME}/.codex:/home/codex/.codex
-  - type: bind
-    source: ${CODEX_WORKSPACES:?Set CODEX_WORKSPACES to an absolute host path}
-    target: ${CODEX_WORKSPACES:?Set CODEX_WORKSPACES to an absolute host path}
-```
-
-Do not copy Codex credentials into an image or commit them. Compose mounts the host user's `~/.codex` at `/home/codex/.codex`, so a normal host-side Codex login is reused when it is stored there. If that login is keyring-only, or no login exists yet, complete the normal headless device-auth flow inside the running container:
-
-```bash
-docker compose exec web codex login --device-auth
-docker compose restart web
-```
-
-The credentials are written through the mounted `~/.codex` directory and survive container replacement. The MVP runs `codex app-server` inside the web container. Codex therefore sees the container toolchain and mounted files, not arbitrary host-installed programs such as Godot or host compilers.
-
-## Raspberry Pi and updates
-
-The target is a 64-bit `arm64` Linux distribution. CI cross-builds the `linux/arm64` image and smoke-tests it under QEMU, including the bundled Codex version, but this initial slice has not yet been exercised on the target Pi hardware. Install Docker and use Compose as above; authenticate on the host or directly in the container. Tailscale stays outside the app container; keep the direct port loopback-bound and add authenticated Tailscale Serve or a hardened proxy only after the security gaps are closed.
-
-Updates are explicit and user-requested:
-
-```bash
-./tools/update.sh
-```
-
-`tools/update.sh` is the supported update path. It rebuilds the default local image or pulls the configured prebuilt image, then replaces the service. Back up application data and stop active sessions before migrations. The UI must not silently self-update.
-
-## Prebuilt container image
-
-After the AMD64 and ARM64 smoke jobs pass for `main`, CI builds and publishes a multi-platform image from that same commit at `ghcr.io/rareskey/codex-webui`. The workflow creates mutable `latest` and source-traceable `sha-<commit>` tags; it never pushes an image from a pull request. A newer run cancels an older run for the same branch so an older commit cannot overwrite `latest` afterward.
-
-The first package is private by default. For ordinary Pi pulls without registry credentials, open **Packages → codex-webui → Package settings → Change visibility** and make it public. This is the only GitHub package setting needed for anonymous pulls; private pulls require registry authentication with package-read access. Making a package public cannot be undone.
-
-To use the prebuilt image on a new checkout, copy `.env.example` to `.env`, set `PUID`, `PGID`, and an absolute `CODEX_WORKSPACES` path for the non-root workspace owner, then select the package:
-
-```dotenv
-CODEX_WEBUI_IMAGE=ghcr.io/rareskey/codex-webui
-CODEX_WEBUI_IMAGE_TAG=latest
-```
-
-Run the normal bootstrap; it detects the remote image and starts it without a local build:
-
-```bash
-./tools/bootstrap.sh
-```
-
-`latest` follows the newest successful `main` build. For a source-traceable deployment, use the `sha-...` tag shown on the package; only a manifest digest is immutable. `tools/update.sh` subsequently pulls the selected remote tag. The Compose mounts, Codex login flow, absolute workspace-path requirement, and loopback-only port binding are unchanged.
-
-## Development and security
-
-Follow [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md). This app can execute Codex against mounted workspaces, so access is equivalent to the container's authority over those mounts. Read [`SECURITY.md`](SECURITY.md) before remote exposure.
+Anyone who can use this loopback client gains the effective Codex authority of the signed-in Mac user over configured workspaces. Do not expose the port to a LAN or the internet. The current Host, Origin, fetch-site, CSP, framing, MIME, referrer, and microphone policies are a localhost baseline, not user authentication.
 
 ## Gaps
 
-- Project edit/delete, task edit/delete/history, richer image metadata, and advanced runtime/settings management remain future work.
-- Host-toolchain execution needs the authenticated external App Server transport described in design; it is not an MVP feature.
-- Remote authentication, rate limiting, backup automation, and in-app updates remain staged work; use `tools/update.sh` for updates.
-- Establish versioned release tags, digest pinning, package retention, and rollback guidance for published images.
+- Add automated browser/WebRTC integration coverage and manual microphone/audio evidence on a signed-in account.
+- Add a macOS launch agent or signed `.app` wrapper if background startup and Dock integration become requirements.
+- Reconcile or retire the older container distribution after deciding whether Mac-only is the permanent product scope.

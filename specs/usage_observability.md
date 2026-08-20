@@ -1,10 +1,28 @@
 # Usage and observability
 
-`GET /api/usage` requests `account/rateLimits/read` and `account/usage/read` independently and reports each failure. `frontend/src/api.ts` maps nested primary/secondary rate limits plus lifetime tokens, peak daily tokens, current streak, and reset time; missing values remain `null`/Unavailable. Streaming `thread/tokenUsage/updated` events merge authoritative context-window percentage into the active conversation. `GET /api/system` reports Python/platform, configured Codex command, initialization info/error, approval/sandbox settings, workspace path, and disk totals.
+## Status
 
-`GET /api/health` reports overall/degraded, Codex availability/error, and a database `ok` label. The container health check calls it, so degraded Codex still counts as an HTTP-successful container. No third-party telemetry is configured.
+Implemented upstream usage/context subset and redacted local diagnostics.
+
+## Source Sync
+
+- Status/usage endpoints: `backend/app/main.py`.
+- CLI version and process errors: `backend/app/codex_client.py`.
+- UI mapping and formatting: `frontend/src/api.ts`, `frontend/src/App.tsx`, and `frontend/src/token-format.ts`.
+
+## Behavior
+
+`GET /api/usage` requests `account/rateLimits/read` and `account/usage/read` independently and reports each failure without inventing values. Streaming `thread/tokenUsage/updated` events update context percentage. `GET /api/system` reports Python/platform, `localhost-companion` runtime, configured Codex executable name, detected CLI version, initialization metadata/error, policy defaults, workspace root, and disk totals.
+
+`GET /api/health` reports healthy/degraded App Server state and database initialization. No third-party telemetry is configured. Prompts, outputs, file contents, environment values, authentication material, and App Server stderr are not retained in application logs by default.
+
+The Settings usage card abbreviates token totals using the existing thousands and millions rules and a billions unit for values at or above one billion. Both lifetime and peak-daily totals share the same formatter. The visual abbreviation is paired with the exact, grouped token count for hover disclosure and assistive technology; unavailable values remain labeled `Unavailable`.
+
+## Verification
+
+Frontend tests cover nested usage, missing-value handling, K/M/B formatting boundaries, and exact accessible token labels. Backend tests cover degraded bootstrap and protocol failure state. The live smoke prints only pass/fail milestones.
 
 ## Gaps
 
-- Map remaining runtime/storage settings fields and distinguish exact upstream usage provenance in detail views.
-- Health does not execute a database probe or separate storage readiness; structured redaction/correlation and retention need implementation.
+- Health does not execute a database read/write probe or separate storage readiness.
+- Add structured correlation/redaction tests, retention policy, and realtime connection diagnostics without exposing SDP/audio.

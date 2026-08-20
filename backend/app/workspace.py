@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -97,3 +99,95 @@ class Workspace:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(data)
         return {"path": str(path.relative_to(self.root)), "size": len(data)}
+
+    def changes(self, relative: str = ".", limit: int = 1000) -> dict[str, Any]:
+        """Return bounded, read-only Git status for a path inside the workspace.
+
+        This is deliberately not a generic command surface. The executable and
+        arguments are fixed, hooks and filesystem monitors are disabled, and the
+        discovered worktree must remain inside the configured workspace root.
+        """
+        target = self.resolve(relative, must_exist=True)
+        if target.is_file():
+            target = target.parent
+        git = shutil.which("git")
+        if not git:
+            raise RuntimeError("Git is not installed on this Mac")
+        prefix = [
+            git,
+            "-c", "core.hooksPath=/dev/null",
+            "-c", "core.fsmonitor=false",
+            "-C", str(target),
+        ]
+        root_result = subprocess.run(
+            [*prefix, "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+        if root_result.returncode != 0:
+            raise ValueError("The selected conversation folder is not a Git worktree")
+        git_root = Path(root_result.stdout.decode("utf-8", "replace").strip()).resolve()
+        try:
+            git_root.relative_to(self.root)
+        except ValueError as exc:
+            raise UnsafePath("Git worktree escapes the configured workspace root") from exc
+
+        status_result = subprocess.run(
+            [
+                *prefix,
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
+                "--ignore-submodules=all",
+            ],
+            check=False,
+            capture_output=True,
+            timeout=8,
+        )
+        if status_result.returncode != 0:
+            raise ValueError("Git could not read changes for this worktree")
+        if len(status_result.stdout) > 2 * 1024 * 1024:
+            raise ValueError("Git change output exceeds the local safety limit")
+
+        records = status_result.stdout.split(b"\0")
+        changes: list[dict[str, Any]] = []
+        index = 0
+        while index < len(records) and len(changes) < max(1, min(limit, 1000)):
+            raw = records[index]
+            index += 1
+            if len(raw) < 4:
+                continue
+            code = raw[:2].decode("ascii", "replace")
+            relative_path = raw[3:].decode("utf-8", "replace")
+            original_path: str | None = None
+            if "R" in code or "C" in code:
+                if index < len(records):
+                    original_path = records[index].decode("utf-8", "replace")
+                    index += 1
+            resolved = (git_root / relative_path).resolve(strict=False)
+            try:
+                workspace_path = resolved.relative_to(self.root)
+            except ValueError:
+                continue
+            if code == "??" or "A" in code:
+                status = "added"
+            elif "D" in code:
+                status = "deleted"
+            else:
+                status = "modified"
+            item: dict[str, Any] = {
+                "path": str(workspace_path),
+                "name": Path(relative_path).name,
+                "status": status,
+                "code": code,
+            }
+            if original_path:
+                item["original_path"] = original_path
+            changes.append(item)
+        return {
+            "data": changes,
+            "repoRoot": str(git_root.relative_to(self.root)) or ".",
+            "truncated": len(changes) >= max(1, min(limit, 1000)),
+        }

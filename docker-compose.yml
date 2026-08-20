@@ -26,6 +26,7 @@ services:
       # identical absolute path inside and outside the container.
       CODEX_WEBUI_WORKSPACE_ROOT: ${CODEX_WORKSPACES:?Set CODEX_WORKSPACES to an absolute host path}
       CODEX_WEBUI_FRONTEND_DIST: /app/frontend/dist
+      CODEX_WEBUI_RUNTIME: container
       CODEX_WEBUI_APPROVAL_POLICY: ${DEFAULT_APPROVAL_POLICY:-on-request}
       CODEX_WEBUI_SANDBOX: ${DEFAULT_SANDBOX:-workspace-write}
       CODEX_WEBUI_ALLOWED_HOSTS: ${CODEX_WEBUI_ALLOWED_HOSTS:-127.0.0.1,localhost,[::1]}

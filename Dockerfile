@@ -28,7 +28,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CODEX_HOME=/home/codex/.codex \
     CODEX_WEBUI_DATA_DIR=/data \
     CODEX_WEBUI_WORKSPACE_ROOT=/workspaces \
-    CODEX_WEBUI_FRONTEND_DIST=/app/frontend/dist
+    CODEX_WEBUI_FRONTEND_DIST=/app/frontend/dist \
+    CODEX_WEBUI_RUNTIME=container
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates curl git jq ripgrep tini \
