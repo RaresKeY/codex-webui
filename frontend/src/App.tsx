@@ -14,7 +14,7 @@ import { groupEventFeed } from './event-groups'
 import { MarkdownContent } from './MarkdownContent'
 import { RealtimeVoiceSession } from './realtime'
 import { exactTokenCountLabel, formatTokenCount } from './token-format'
-import { IDLE_TURN, isTurnActive, mergeStreamEvent, reduceTurnLifecycle, settleStreamEvents, type TurnAction } from './turn-lifecycle'
+import { IDLE_TURN, isTurnActive, mergeStreamEvent, reduceTurnLifecycle, settleStreamEvents, stampAssistantMessageModel, type TurnAction } from './turn-lifecycle'
 import type { BackgroundTerminal, BootstrapPayload, ConnectionState, Conversation, EventKind, LiveUpdate, Project, RealtimeCapability, RealtimeSignal, Schedule, StreamEvent, TurnLifecycle, TurnSignal, View, VoiceState, WorkspaceChanges, WorkspaceFile } from './types'
 
 const iconSize = 17
@@ -107,6 +107,10 @@ function EventState({ event }: { event: StreamEvent }) {
   return <span className={`event-state ${event.state}`}>{event.state === 'running' && <RefreshCw size={11} className="spin" />}{event.state}</span>
 }
 
+function MessageModel({ model }: { model: string }) {
+  return <span className="message-model" title={`Model used: ${model}`}><Cpu size={10} /><span>{model}</span></span>
+}
+
 function CommandCard({ event }: { event: StreamEvent }) {
   const commandLine = event.content.split('\n').find(line => line.trim())?.trim() || event.title || 'Command'
   return <details className={`command-card ${event.state ?? ''}`}>
@@ -133,7 +137,7 @@ function CommandGroup({ commands }: { commands: StreamEvent[] }) {
   </details>
 }
 
-function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; conversationId: string; onApproval: (id: string, approved: boolean) => void }) {
+function EventCard({ event, conversationId, fallbackModel, onApproval }: { event: StreamEvent; conversationId: string; fallbackModel: string; onApproval: (id: string, approved: boolean) => void }) {
   const [responding, setResponding] = useState(false)
   const [approvalError, setApprovalError] = useState('')
   const answerApproval = (approved: boolean) => {
@@ -147,11 +151,12 @@ function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; 
   }
   if (event.kind === 'message') {
     const assistantRunning = event.role !== 'user' && event.state === 'running'
+    const messageModel = typeof event.meta?.model === 'string' ? event.meta.model : fallbackModel
     if (event.role !== 'user' && !event.content && !assistantRunning) return null
     return <article className={`message ${event.role ?? 'assistant'} ${event.state ?? ''} ${assistantRunning ? 'streaming' : ''}`}>
       <div className="message-avatar">{event.role === 'user' ? 'RK' : <Bot size={17} />}</div>
       <div className="message-body">
-        <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{assistantRunning && <span className="response-state"><RefreshCw size={10} className="spin" />Responding</span>}<time>{event.timestamp}</time></div>
+        <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{event.role !== 'user' && <MessageModel model={messageModel} />}{assistantRunning && <span className="response-state"><RefreshCw size={10} className="spin" />Responding</span>}<time>{event.timestamp}</time></div>
         {event.content
           ? event.role === 'user'
             ? <p>{event.content}</p>
@@ -183,9 +188,8 @@ function ContextRing({ percent }: { percent: number }) {
   return <span className="context-ring" style={{ '--context': `${percent * 3.6}deg` } as React.CSSProperties}><span>{percent}%</span></span>
 }
 
-function Composer({ conversation, models, onSend, voiceEnabled, voiceState, voiceMessage, onVoiceToggle }: { conversation: Conversation; models: string[]; onSend: (prompt: string, model: string, effort: string) => void; voiceEnabled: boolean; voiceState: VoiceState; voiceMessage: string; onVoiceToggle: () => void }) {
+function Composer({ model, models, onModelChange, onSend, voiceEnabled, voiceState, voiceMessage, onVoiceToggle }: { model: string; models: string[]; onModelChange: (model: string) => void; onSend: (prompt: string, model: string, effort: string) => void; voiceEnabled: boolean; voiceState: VoiceState; voiceMessage: string; onVoiceToggle: () => void }) {
   const [value, setValue] = useState('')
-  const [model, setModel] = useState(conversation.model)
   const [effort, setEffort] = useState('High')
   const submit = (event: FormEvent) => { event.preventDefault(); if (!value.trim()) return; onSend(value.trim(), model, effort.toLowerCase()); setValue('') }
   const voiceActive = voiceState === 'live' || voiceState === 'connecting'
@@ -194,7 +198,7 @@ function Composer({ conversation, models, onSend, voiceEnabled, voiceState, voic
     <form className="composer" onSubmit={submit}>
       <textarea value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} placeholder="Ask Codex to inspect, change, or run something…" aria-label="Message Codex" rows={2} />
       <div className="composer-tools">
-        <div><IconButton label="Add context (not available yet)" disabled><Plus size={16} /></IconButton><IconButton label={voiceLabel} active={voiceActive} disabled={!voiceEnabled || voiceState === 'stopping'} onClick={onVoiceToggle}>{voiceActive ? <MicOff size={16} /> : <Mic size={16} />}</IconButton><button className="select-button"><Cpu size={14} /><select value={model} onChange={e => setModel(e.target.value)} aria-label="Model">{models.map(option => <option key={option}>{option}</option>)}</select><ChevronDown size={12} /></button><button className="select-button"><Gauge size={14} /><select value={effort} onChange={e => setEffort(e.target.value)} aria-label="Reasoning effort"><option>Low</option><option>Medium</option><option>High</option><option>Max</option></select><ChevronDown size={12} /></button></div>
+        <div><IconButton label="Add context (not available yet)" disabled><Plus size={16} /></IconButton><IconButton label={voiceLabel} active={voiceActive} disabled={!voiceEnabled || voiceState === 'stopping'} onClick={onVoiceToggle}>{voiceActive ? <MicOff size={16} /> : <Mic size={16} />}</IconButton><button className="select-button"><Cpu size={14} /><select value={model} onChange={e => onModelChange(e.target.value)} aria-label="Model">{models.map(option => <option key={option}>{option}</option>)}</select><ChevronDown size={12} /></button><button className="select-button"><Gauge size={14} /><select value={effort} onChange={e => setEffort(e.target.value)} aria-label="Reasoning effort"><option>Low</option><option>Medium</option><option>High</option><option>Max</option></select><ChevronDown size={12} /></button></div>
         <div className="send-cluster"><span>Enter to send</span><button className="send-button" disabled={!value.trim()} aria-label="Send message"><ArrowUp size={17} /></button></div>
       </div>
     </form>
@@ -215,6 +219,7 @@ interface ChatSurfaceProps {
   setEvents: React.Dispatch<React.SetStateAction<StreamEvent[]>>
   onTurnAction: (action: TurnAction) => void
   onConversationStatus: (status: Conversation['status']) => void
+  onTurnModel: (model: string) => void
   onAssignProject: (projectId: string) => void
   onRename: (title: string) => Promise<void>
   leftOpen: boolean
@@ -222,7 +227,7 @@ interface ChatSurfaceProps {
   openRight: () => void
 }
 
-function ChatSurface({ conversation, project, projects, models, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
+function ChatSurface({ conversation, project, projects, models, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
   const feedRef = useRef<HTMLElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -232,6 +237,8 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
   const [renameValue, setRenameValue] = useState(conversation.title)
   const [renameError, setRenameError] = useState('')
   const [savingName, setSavingName] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(conversation.model)
+  const [activeResponseModel, setActiveResponseModel] = useState(conversation.model)
   const autoTitleThread = useRef('')
   const currentTitle = useRef(conversation.title)
   const voiceSession = useMemo(() => new RealtimeVoiceSession((state, message) => { setVoiceState(state); setVoiceMessage(message ?? '') }), [])
@@ -244,6 +251,7 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
   const effectiveVoiceState: VoiceState = voiceUnavailableReason ? 'unsupported' : voiceState
   const effectiveVoiceMessage = voiceUnavailableReason || voiceMessage
   const voiceEnabled = !voiceUnavailableReason && connection === 'online'
+  const modelOptions = models.includes(selectedModel) ? models : [selectedModel, ...models]
   useLayoutEffect(() => {
     if (stickToBottom.current) endRef.current?.scrollIntoView({ block: 'end' })
   }, [events, turn.phase])
@@ -281,6 +289,8 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
   }
   const onSend = (content: string, model: string, effort: string) => {
     const requestId = crypto.randomUUID()
+    setActiveResponseModel(model)
+    onTurnModel(model)
     const event: StreamEvent = { id: crypto.randomUUID(), kind: 'message', role: 'user', content, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), meta: { optimistic: true } }
     setEvents(current => [...current, event])
     onTurnAction({ type: 'submitted', requestId })
@@ -301,7 +311,7 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
       onTurnAction({ type: 'request-failed', requestId, message: 'Codex could not start this turn.' })
       onConversationStatus('failed')
       const failure: StreamEvent = connection === 'demo'
-        ? { id: crypto.randomUUID(), kind: 'message', role: 'assistant', content: 'Demo mode is active. Connect the local service to run this prompt through Codex CLI.', timestamp: 'Now' }
+        ? { id: crypto.randomUUID(), kind: 'message', role: 'assistant', content: 'Demo mode is active. Connect the local service to run this prompt through Codex CLI.', timestamp: 'Now', meta: { model } }
         : { id: crypto.randomUUID(), kind: 'status', title: 'Turn could not start', content: turnStartFailureMessage(error), timestamp: 'Now', state: 'failed' }
       setEvents(current => [...current, failure])
     })
@@ -315,18 +325,18 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
         <div><StatusDot status={conversation.status} /><h2 className="conversation-title" onDoubleClick={openRename} title="Double-click to rename">{conversation.title}</h2><button type="button" className="rename-trigger" onClick={openRename} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></div>
         <span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span>{renameError && !renaming && <small className="chat-name-error" role="alert">{renameError}</small>}
       </div>
-      <div className="chat-header-actions">{turnActive && <span className="turn-status-pill" role="status"><RefreshCw size={11} className="spin" />{turn.phase === 'waiting' ? 'Waiting for Codex' : 'Codex responding'}</span>}<label className="chat-project-select" title="Assign project"><FolderGit2 size={13} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select><ChevronDown size={11} /></label><ConnectionPill state={connection} /><button className="context-button" title="Context usage"><ContextRing percent={conversation.contextPercent} /><span>Context<br /><strong>{conversation.contextPercent}% used</strong></span></button><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton></div>
+      <div className="chat-header-actions">{turnActive && <span className="turn-status-pill" role="status"><RefreshCw size={11} className="spin" />{turn.phase === 'waiting' ? 'Waiting for Codex' : 'Codex responding'}</span>}<label className="chat-model-select" title="Model for the next message"><Cpu size={13} /><span>Model</span><select value={selectedModel} onChange={event => setSelectedModel(event.target.value)} aria-label="Model for the next message">{modelOptions.map(option => <option key={option}>{option}</option>)}</select><ChevronDown size={11} /></label><label className="chat-project-select" title="Assign project"><FolderGit2 size={13} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select><ChevronDown size={11} /></label><ConnectionPill state={connection} /><button className="context-button" title="Context usage"><ContextRing percent={conversation.contextPercent} /><span>Context<br /><strong>{conversation.contextPercent}% used</strong></span></button><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton></div>
     </header>
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       <div className="session-divider"><span>Session resumed</span><small>Today · {conversation.model} · {conversation.cwd}</small></div>
       {feedEntries.map(entry => entry.type === 'commands'
         ? <CommandGroup commands={entry.commands} key={entry.id} />
-        : <EventCard event={entry.event} conversationId={conversation.id} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
-      {turn.phase === 'waiting' && !hasRunningAssistant && <article className="message assistant streaming turn-placeholder"><div className="message-avatar"><Bot size={17} /></div><div className="message-body"><div className="message-author">Codex<span className="response-state"><RefreshCw size={10} className="spin" />Waiting</span></div><div className="response-placeholder" role="status"><span /><span /><span />Preparing a response</div></div></article>}
+        : <EventCard event={entry.event} conversationId={conversation.id} fallbackModel={conversation.model} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
+      {turn.phase === 'waiting' && !hasRunningAssistant && <article className="message assistant streaming turn-placeholder"><div className="message-avatar"><Bot size={17} /></div><div className="message-body"><div className="message-author">Codex<MessageModel model={activeResponseModel} /><span className="response-state"><RefreshCw size={10} className="spin" />Waiting</span></div><div className="response-placeholder" role="status"><span /><span /><span />Preparing a response</div></div></article>}
       {turnActive && <div className="turn-activity" role="status" aria-live="polite"><RefreshCw size={12} className="spin" /><span><strong>{turn.phase === 'waiting' ? 'Turn in progress' : 'Response streaming'}</strong><small>{turn.phase === 'waiting' ? 'Waiting for the first Codex event…' : 'New text will appear here as it arrives.'}</small></span></div>}
       <div ref={endRef} />
     </section>
-    <Composer conversation={conversation} models={models} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} />
+    <Composer model={selectedModel} models={modelOptions} onModelChange={setSelectedModel} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} />
     {renaming && <Modal title="Rename conversation" description="Choose a concise name that will be easy to find later." onClose={closeRename}><form className="modal-form rename-modal-form" onSubmit={submitRename}><label>Conversation name<input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onFocus={event => event.currentTarget.select()} onKeyDown={event => { if (event.key === 'Escape') closeRename() }} aria-label="Conversation name" /></label>{renameError && <p className="modal-error" role="alert">{renameError}</p>}<footer><button type="button" className="button" disabled={savingName} onClick={closeRename}>Cancel</button><button className="button primary" disabled={!renameValue.trim() || savingName}>{savingName ? 'Saving…' : 'Save'}</button></footer></form></Modal>}
   </main>
 }
@@ -617,6 +627,7 @@ export default function App() {
   const [view, setView] = useState<View>('chat')
   const [activeId, setActiveId] = useState('')
   const activeIdRef = useRef('')
+  const activeModelRef = useRef('')
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [turn, setTurn] = useState<TurnLifecycle>(IDLE_TURN)
   const [realtimeSignal, setRealtimeSignal] = useState<RealtimeSignal | null>(null)
@@ -627,7 +638,7 @@ export default function App() {
 
   useLayoutEffect(() => { activeIdRef.current = activeId }, [activeId])
 
-  useEffect(() => { void loadBootstrap().then(result => { setData(result.data); setConnection(result.connection); setActiveId(result.data.conversations[0]?.id ?? '') }) }, [])
+  useEffect(() => { void loadBootstrap().then(result => { const first = result.data.conversations[0]; setData(result.data); setConnection(result.connection); activeModelRef.current = first?.model ?? result.data.models[0] ?? ''; setActiveId(first?.id ?? '') }) }, [])
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
     const media = window.matchMedia(narrowLayoutQuery)
@@ -649,7 +660,7 @@ export default function App() {
       conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, status } : conversation),
     } : current)
     const applyUpdate = (update: LiveUpdate) => {
-      if (update.event) setEvents(current => mergeStreamEvent(current, update.event!))
+      if (update.event) setEvents(current => stampAssistantMessageModel(mergeStreamEvent(current, update.event!), activeModelRef.current))
       if (update.contextPercent !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, contextPercent: update.contextPercent! } : conversation) } : current)
       if (update.conversationTitle !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, title: update.conversationTitle! } : conversation) } : current)
       if (update.realtime) setRealtimeSignal(update.realtime)
@@ -671,7 +682,7 @@ export default function App() {
       hydrating = true
       const snapshot = await loadConversationSnapshot(activeId, data?.demo ?? false)
       if (disposed) return
-      setEvents(snapshot.events)
+      setEvents(stampAssistantMessageModel(snapshot.events, activeModelRef.current))
       setTurn(snapshot.turn)
       const status = conversationStatusForTurn(snapshot.turn)
       if (status) setConversationStatus(status)
@@ -705,6 +716,7 @@ export default function App() {
   const showView = (next: View) => { setView(next); if (isNarrowLayout()) { setLeftOpen(false); setRightOpen(false) } }
   const selectConversation = (conversation: Conversation) => {
     setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === conversation.id) ? current.conversations : [conversation, ...current.conversations] } : current)
+    activeModelRef.current = conversation.model
     setActiveId(conversation.id)
     showView('chat')
   }
@@ -723,11 +735,13 @@ export default function App() {
     {leftOpen && <ChatSidebar data={data} activeId={activeId} onSelect={selectConversation} onClose={() => setLeftOpen(false)} onNewChat={() => {
       void createConversation({ projectId: activeProject?.id, cwd: activeProject?.path !== '.' ? activeProject?.path : activeConversation?.cwd, model: data.models[0] }).then(conversation => {
         setData(current => current ? { ...current, conversations: [conversation, ...current.conversations] } : current)
+        activeModelRef.current = conversation.model
         setActiveId(conversation.id)
       }).catch(() => {
         if (data.demo) {
           const conversation: Conversation = { id: crypto.randomUUID(), projectId: activeProject?.id ?? data.projects[0].id, title: 'New demo conversation', preview: 'Visual-only local session preview', updatedAt: 'Now', status: 'ready', cwd: activeProject?.path ?? '/workspace', model: 'gpt-5.6-sol', contextPercent: 0 }
           setData(current => current ? { ...current, conversations: [conversation, ...current.conversations] } : current)
+          activeModelRef.current = conversation.model
           setActiveId(conversation.id)
         } else {
           setEvents(current => [...current, { id: crypto.randomUUID(), kind: 'status', title: 'Conversation not created', content: 'Codex could not create a local thread. Check the connection and selected workspace.', timestamp: 'Now', state: 'failed' }])
@@ -737,7 +751,7 @@ export default function App() {
     }} />}
     <div className="mobile-scrim left" onClick={() => setLeftOpen(false)} />
     <div className="content-area">
-      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
+      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={model => { activeModelRef.current = model }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
       {view === 'projects' && <ProjectsPage projects={data.projects} conversations={data.conversations} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} />}
       {view === 'schedules' && <SchedulesPage schedules={data.schedules} onAdd={schedule => setData(current => current ? { ...current, schedules: [schedule, ...current.schedules] } : current)} onUpdate={schedule => setData(current => current ? { ...current, schedules: current.schedules.map(item => item.id === schedule.id ? schedule : item) } : current)} />}
       {view === 'images' && <ImagesPage data={data} onChange={images => setData(current => current ? { ...current, images } : current)} />}

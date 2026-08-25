@@ -98,6 +98,17 @@ export function mergeStreamEvent(current: StreamEvent[], incoming: StreamEvent):
   return next
 }
 
+export function stampAssistantMessageModel(events: StreamEvent[], model: string): StreamEvent[] {
+  if (!model) return events
+  let changed = false
+  const stamped = events.map(event => {
+    if (event.kind !== 'message' || event.role === 'user' || typeof event.meta?.model === 'string') return event
+    changed = true
+    return { ...event, meta: { ...event.meta, model } }
+  })
+  return changed ? stamped : events
+}
+
 export function settleStreamEvents(events: StreamEvent[], status: 'completed' | 'interrupted' | 'failed'): StreamEvent[] {
   return events.map(event => {
     if (event.state !== 'running' || event.meta?.realtime === true) return event

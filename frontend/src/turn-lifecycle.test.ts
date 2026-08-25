@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IDLE_TURN, isTurnActive, mergeStreamEvent, reduceTurnLifecycle, settleStreamEvents } from './turn-lifecycle'
+import { IDLE_TURN, isTurnActive, mergeStreamEvent, reduceTurnLifecycle, settleStreamEvents, stampAssistantMessageModel } from './turn-lifecycle'
 import type { StreamEvent } from './types'
 
 describe('turn lifecycle', () => {
@@ -95,5 +95,14 @@ describe('stream event merging', () => {
     expect(merged).toHaveLength(1)
     expect(merged[0]).toMatchObject({ id: 'server-user', content: 'Inspect this', state: 'done' })
     expect(merged[0].meta?.optimistic).toBeUndefined()
+  })
+
+  it('stamps assistant model provenance once without relabeling an active stream', () => {
+    let events = stampAssistantMessageModel(mergeStreamEvent([], delta('Hel')), 'gpt-5.6-sol')
+    events = stampAssistantMessageModel(mergeStreamEvent(events, delta('lo')), 'gpt-5.6-terra')
+    expect(events[0]).toMatchObject({ content: 'Hello', meta: { model: 'gpt-5.6-sol' } })
+
+    const user = { id: 'user-1', kind: 'message', role: 'user', content: 'Hi', timestamp: 'Now' } satisfies StreamEvent
+    expect(stampAssistantMessageModel([user], 'gpt-5.6-sol')[0].meta).toBeUndefined()
   })
 })

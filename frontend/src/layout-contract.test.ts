@@ -22,6 +22,13 @@ describe('application shell layout contract', () => {
     expect(appSource).toContain('<IconButton label="Open context panel" onClick={openRight}>')
   })
 
+  it('keeps model selection visible in the header and model provenance on assistant rows', () => {
+    expect(appSource).toContain('className="chat-model-select"')
+    expect(appSource).toContain('className="message-model"')
+    expect(styles).toContain('.chat-model-select { height: 29px;')
+    expect(styles).toContain('.message-model { min-width: 0;')
+  })
+
   it('reduces to rail plus conversation and overlays both drawers at the narrow breakpoint', () => {
     const narrowStyles = styles.slice(styles.indexOf('@media (max-width: 1000px)'))
     expect(narrowStyles).toContain('grid-template-areas: "rail conversation"')
