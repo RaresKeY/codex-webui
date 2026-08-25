@@ -2,7 +2,7 @@
 
 Distributed dependencies use committed lockfiles or immutable digests. `backend/requirements.txt` currently constrains FastAPI 0.116–<1, Uvicorn 0.35–<1, pydantic-settings 2.10–<3, eval-type-backport 0.3–<1, aiosqlite 0.21–<1, python-multipart 0.0.20–<1, APScheduler 3.11–<4, pytest 8.4–<9, pytest-asyncio 1.1–<2, and HTTPX 0.28–<1. The backport lets Pydantic evaluate the repository's modern union annotations on macOS system Python 3.9. Python production and test dependencies are not yet split or hash-locked.
 
-`frontend/package.json` and `package-lock.json` pin the direct JavaScript dependencies. The current top-level install includes React/React DOM 19.2.8, lucide-react 1.28.0, Vite 8.2.0, TypeScript 6.0.3, Vitest 4.1.10, ESLint 10.8.0, and exact related plugin/type versions.
+`frontend/package.json` and `package-lock.json` pin the direct JavaScript dependencies. The current top-level install includes React/React DOM 19.2.8, lucide-react 1.28.0, react-markdown 10.1.0, remark-gfm 4.0.1, Vite 8.2.0, TypeScript 6.0.3, Vitest 4.1.10, ESLint 10.8.0, and exact related plugin/type versions. React-markdown owns safe Markdown-to-React projection without raw HTML; remark-gfm adds tables, task lists, strikethrough, and autolinks. The lock overrides Nano ID to the patched compatible 3.3.18 release required by PostCSS.
 
 The primary Mac launcher uses host Python 3 plus a project-local `.venv`, host Node/npm for frontend builds, and prefers the official standalone Codex executable at `~/.local/bin/codex` unless `CODEX_BIN` explicitly selects another binary. The optional runtime image is based on `python:3.12-slim` and copies Node from `node:22-bookworm-slim`; build stages and apt packages are not pinned to immutable digests.
 

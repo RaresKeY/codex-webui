@@ -139,8 +139,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message-author { display: flex; align-items: baseline; gap: 8px; font-size: 10px; font-weight: 700; color: #d8e1db; }
 .message-author time { font-size: 8px; font-weight: 400; color: var(--subtle); }
 .response-state { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-.message p { white-space: pre-wrap; margin: 6px 0 0; font-size: 12px; line-height: 1.7; color: #c9d1cc; }
-.stream-caret { width: 5px; height: 13px; display: inline-block; margin-left: 3px; vertical-align: -2px; border-radius: 1px; background: var(--accent); animation: stream-blink .85s steps(2, start) infinite; }
+.message.user .message-body > p { white-space: pre-wrap; margin: 6px 0 0; font-size: 12px; line-height: 1.7; color: #c9d1cc; }
+.message-rendered.streaming .markdown-content > :last-child::after { content: ''; width: 5px; height: 13px; display: inline-block; margin-left: 4px; vertical-align: -2px; border-radius: 1px; background: var(--accent); animation: stream-blink .85s steps(2, start) infinite; }
 .response-placeholder { min-height: 25px; display: flex; align-items: center; gap: 4px; margin-top: 5px; color: #8d9a92; font-size: 9px; }
 .response-placeholder span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: dot 1.3s infinite; }
 .response-placeholder span:nth-child(2) { animation-delay: .15s; }
@@ -159,11 +159,47 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .event-content { min-width: 0; border: 1px solid var(--line-soft); background: #111513; border-radius: 8px; overflow: hidden; }
 .event-content header { height: 31px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--line-soft); color: #bdc7c1; font-size: 9px; font-weight: 600; }
 .event-content header time { margin-left: auto; color: var(--subtle); font-size: 7px; font-weight: 400; }
-.event-content p { margin: 0; padding: 9px 11px; color: #9fa9a3; font-size: 10px; line-height: 1.6; white-space: pre-wrap; }
+.event-content > p { margin: 0; padding: 9px 11px; color: #9fa9a3; font-size: 10px; line-height: 1.6; white-space: pre-wrap; }
 .event-content .reasoning-waiting { color: var(--subtle); font-style: italic; }
 .event-content .file-lines { font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1.8; color: #aebcb4; }
-.event-content pre { margin: 0; padding: 9px 11px; overflow-x: auto; background: #0b0e0d; }
+.event-content > pre { margin: 0; padding: 9px 11px; overflow-x: auto; background: #0b0e0d; }
 .event-content code, .code-preview, .code-editor { font-family: 'DM Mono', ui-monospace, monospace; font-size: 9px; line-height: 1.65; color: #b8c6be; }
+.markdown-content { min-width: 0; margin-top: 6px; color: #c9d1cc; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.markdown-content.compact { margin: 0; padding: 9px 11px; color: #aab4ae; font-size: 10px; line-height: 1.6; }
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content p { margin: 0 0 9px; white-space: normal; }
+.markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 { margin: 16px 0 7px; color: #e0e7e2; line-height: 1.3; letter-spacing: -.015em; }
+.markdown-content h1 { font-size: 17px; }
+.markdown-content h2 { font-size: 15px; }
+.markdown-content h3 { font-size: 13px; }
+.markdown-content h4 { font-size: 12px; }
+.markdown-content.compact h1 { font-size: 13px; }
+.markdown-content.compact h2 { font-size: 12px; }
+.markdown-content.compact h3, .markdown-content.compact h4 { font-size: 11px; }
+.markdown-content ul, .markdown-content ol { margin: 4px 0 10px; padding-left: 22px; }
+.markdown-content li { padding-left: 2px; }
+.markdown-content li + li { margin-top: 3px; }
+.markdown-content li > p { margin: 0; }
+.markdown-content input[type='checkbox'] { margin: 0 6px 0 -18px; accent-color: var(--accent); }
+.markdown-content blockquote { margin: 10px 0; padding: 2px 0 2px 12px; border-left: 3px solid #52625a; color: #9eaaa3; }
+.markdown-content blockquote > :last-child { margin-bottom: 0; }
+.markdown-content a { color: #8bc9ec; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.markdown-content a:hover { color: #b6dcf2; }
+.markdown-content hr { height: 1px; margin: 15px 0; border: 0; background: var(--line); }
+.markdown-content :not(pre) > code { padding: 1px 4px; border: 1px solid #344039; border-radius: 4px; background: #111713; color: #d0ddd5; font: .88em/1.5 'DM Mono', ui-monospace, monospace; }
+.markdown-code-block { position: relative; margin: 10px 0; overflow: hidden; border: 1px solid #303a34; border-radius: 8px; background: #090c0b; }
+.markdown-code-header { height: 27px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 10px; border-bottom: 1px solid #27312c; background: #111512; color: #78857d; font-size: 8px; text-transform: lowercase; }
+.markdown-code-header button { border: 0; background: none; color: #8c9991; display: inline-flex; align-items: center; gap: 4px; padding: 3px; font: inherit; cursor: pointer; }
+.markdown-code-header button:hover { color: #d1dbd5; }
+.markdown-code-block pre { margin: 0; padding: 10px 11px; overflow-x: auto; background: transparent; }
+.markdown-code-block code { font: 9px/1.65 'DM Mono', ui-monospace, monospace; color: #c1cec6; white-space: pre; }
+.markdown-table-wrap { max-width: 100%; margin: 10px 0; overflow-x: auto; border: 1px solid #303a34; border-radius: 7px; }
+.markdown-content table { width: 100%; border-collapse: collapse; font-size: .9em; }
+.markdown-content th, .markdown-content td { padding: 6px 8px; border-right: 1px solid #303a34; border-bottom: 1px solid #303a34; text-align: left; white-space: nowrap; }
+.markdown-content th { background: #151b17; color: #d2dbd5; font-weight: 650; }
+.markdown-content tr:last-child td { border-bottom: 0; }
+.markdown-content th:last-child, .markdown-content td:last-child { border-right: 0; }
 .prompt { color: var(--accent); }
 .event-state { color: var(--subtle); font-size: 7px; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
 .event-state.done { color: var(--accent); }

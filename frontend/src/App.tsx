@@ -10,6 +10,7 @@ import {
 import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
+import { MarkdownContent } from './MarkdownContent'
 import { RealtimeVoiceSession } from './realtime'
 import { exactTokenCountLabel, formatTokenCount } from './token-format'
 import { IDLE_TURN, isTurnActive, mergeStreamEvent, reduceTurnLifecycle, settleStreamEvents, type TurnAction } from './turn-lifecycle'
@@ -121,7 +122,9 @@ function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; 
       <div className="message-body">
         <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{assistantRunning && <span className="response-state"><RefreshCw size={10} className="spin" />Responding</span>}<time>{event.timestamp}</time></div>
         {event.content
-          ? <p aria-live={assistantRunning ? 'polite' : undefined}>{event.content}{assistantRunning && <span className="stream-caret" aria-hidden="true" />}</p>
+          ? event.role === 'user'
+            ? <p>{event.content}</p>
+            : <div className={`message-rendered ${assistantRunning ? 'streaming' : ''}`} aria-live={assistantRunning ? 'polite' : undefined}><MarkdownContent source={event.content} /></div>
           : <div className="response-placeholder" role="status"><span /><span /><span />Preparing a response</div>}
         {event.role !== 'user' && event.content && !assistantRunning && <div className="message-actions"><button onClick={() => void navigator.clipboard.writeText(event.content)}><Copy size={13} />Copy</button></div>}
       </div>
@@ -137,7 +140,9 @@ function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; 
         ? <pre><code><span className="prompt">$</span> {event.content}</code></pre>
         : event.kind === 'reasoning' && !event.content
           ? <p className="reasoning-waiting" role="status">Preparing a readable summary…</p>
-          : <p className={event.kind === 'file' ? 'file-lines' : ''}>{event.content}</p>}
+          : event.kind === 'reasoning'
+            ? <MarkdownContent source={event.content} compact />
+            : <p className={event.kind === 'file' ? 'file-lines' : ''}>{event.content}</p>}
       {event.meta && <div className="event-meta">{Object.entries(event.meta).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}
       {event.kind === 'approval' && event.state === 'pending' && <>{approvalError && <p className="approval-error" role="alert">{approvalError}</p>}<div className="approval-actions">{!event.meta?.unsupported && <button className="button primary" disabled={responding} onClick={() => answerApproval(true)}><Check size={14} />{responding ? 'Sending…' : 'Allow once'}</button>}<button className="button" disabled={responding} onClick={() => answerApproval(false)}><X size={14} />{responding ? 'Sending…' : event.meta?.unsupported ? 'Cancel safely' : 'Deny'}</button></div></>}
     </div>
