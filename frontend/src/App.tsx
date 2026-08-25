@@ -221,6 +221,17 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
   }, [realtimeSignal, voiceSession])
   useEffect(() => () => { void voiceSession.stop(true).catch(() => undefined) }, [conversation.id, voiceSession])
   useEffect(() => { currentTitle.current = conversation.title }, [conversation.title])
+  const openRename = () => {
+    setRenameValue(conversation.title)
+    setRenameError('')
+    setRenaming(true)
+  }
+  const closeRename = () => {
+    if (savingName) return
+    setRenaming(false)
+    setRenameValue(conversation.title)
+    setRenameError('')
+  }
   const submitRename = (event: FormEvent) => {
     event.preventDefault()
     const nextTitle = renameValue.trim()
@@ -269,10 +280,8 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
     <header className="chat-header">
       <IconButton label="Open conversations" onClick={openLeft}><Menu size={18} /></IconButton>
       <div className="chat-heading">
-        <div><StatusDot status={conversation.status} />{renaming
-          ? <form className="chat-name-form" onSubmit={submitRename}><input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { setRenaming(false); setRenameValue(conversation.title); setRenameError('') } }} aria-label="Conversation name" /><button type="submit" disabled={!renameValue.trim() || savingName} aria-label="Save conversation name"><Check size={14} /></button><button type="button" disabled={savingName} onClick={() => { setRenaming(false); setRenameValue(conversation.title); setRenameError('') }} aria-label="Cancel rename"><X size={14} /></button></form>
-          : <><h2>{conversation.title}</h2><button type="button" className="rename-trigger" onClick={() => { setRenameValue(conversation.title); setRenameError(''); setRenaming(true) }} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></>}</div>
-        <span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span>{renameError && <small className="chat-name-error" role="alert">{renameError}</small>}
+        <div><StatusDot status={conversation.status} /><h2 className="conversation-title" onDoubleClick={openRename} title="Double-click to rename">{conversation.title}</h2><button type="button" className="rename-trigger" onClick={openRename} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></div>
+        <span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span>{renameError && !renaming && <small className="chat-name-error" role="alert">{renameError}</small>}
       </div>
       <div className="chat-header-actions">{turnActive && <span className="turn-status-pill" role="status"><RefreshCw size={11} className="spin" />{turn.phase === 'waiting' ? 'Waiting for Codex' : 'Codex responding'}</span>}<label className="chat-project-select" title="Assign project"><FolderGit2 size={13} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select><ChevronDown size={11} /></label><ConnectionPill state={connection} /><button className="context-button" title="Context usage"><ContextRing percent={conversation.contextPercent} /><span>Context<br /><strong>{conversation.contextPercent}% used</strong></span></button><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton></div>
     </header>
@@ -284,6 +293,7 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
       <div ref={endRef} />
     </section>
     <Composer conversation={conversation} models={models} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} />
+    {renaming && <Modal title="Rename conversation" description="Choose a concise name that will be easy to find later." onClose={closeRename}><form className="modal-form rename-modal-form" onSubmit={submitRename}><label>Conversation name<input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onFocus={event => event.currentTarget.select()} onKeyDown={event => { if (event.key === 'Escape') closeRename() }} aria-label="Conversation name" /></label>{renameError && <p className="modal-error" role="alert">{renameError}</p>}<footer><button type="button" className="button" disabled={savingName} onClick={closeRename}>Cancel</button><button className="button primary" disabled={!renameValue.trim() || savingName}>{savingName ? 'Saving…' : 'Save'}</button></footer></form></Modal>}
   </main>
 }
 
