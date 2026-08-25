@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error node:fs is provided by the Vitest runtime.
 const { readFileSync } = await import('node:fs')
 const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8') as string
+const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8') as string
 
 describe('application shell layout contract', () => {
   it('pins navigation, the primary conversation, and context to named desktop areas', () => {
@@ -14,6 +15,11 @@ describe('application shell layout contract', () => {
     expect(styles).toContain('.context-panel { grid-area: context;')
     expect(styles).toContain('.rail-panel-controls { width: 100%; display: flex;')
     expect(styles).toContain('.chat-surface.left-panel-closed .chat-header > .icon-button:first-child { display: grid; }')
+  })
+
+  it('starts with the optional right context panel collapsed', () => {
+    expect(appSource).toContain('const [rightOpen, setRightOpen] = useState(false)')
+    expect(appSource).toContain('<IconButton label="Open context panel" onClick={openRight}>')
   })
 
   it('reduces to rail plus conversation and overlays both drawers at the narrow breakpoint', () => {

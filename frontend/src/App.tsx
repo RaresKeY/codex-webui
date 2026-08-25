@@ -622,7 +622,7 @@ export default function App() {
   const [realtimeSignal, setRealtimeSignal] = useState<RealtimeSignal | null>(null)
   const [voiceCapability, setVoiceCapability] = useState<RealtimeCapability>({ available: false, reason: 'Checking realtime voice support…' })
   const [leftOpen, setLeftOpen] = useState(() => !isNarrowLayout())
-  const [rightOpen, setRightOpen] = useState(() => !isNarrowLayout())
+  const [rightOpen, setRightOpen] = useState(false)
   const [activeContextTool, setActiveContextTool] = useState<ContextToolId>(DEFAULT_CONTEXT_TOOL)
 
   useLayoutEffect(() => { activeIdRef.current = activeId }, [activeId])

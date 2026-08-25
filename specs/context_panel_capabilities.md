@@ -16,7 +16,7 @@ Changes to a tool's availability, backing, mutation authority, or Project-inheri
 
 ## Behavior
 
-The right side is one collapsible contextual panel with a registry-driven selector. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
+The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts, remains available from the conversation-header control, and does not compete with the transcript until explicitly opened. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
 
 | Tool | Current state | Backing and boundary |
 | --- | --- | --- |
