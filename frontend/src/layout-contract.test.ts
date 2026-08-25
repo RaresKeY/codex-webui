@@ -34,5 +34,6 @@ describe('application shell layout contract', () => {
     expect(narrowStyles).toContain('grid-template-areas: "rail conversation"')
     expect(narrowStyles).toContain('.chat-sidebar, .context-panel { position: fixed;')
     expect(narrowStyles).toContain('.context-panel { top: 8px; right: 8px; bottom: 8px;')
+    expect(narrowStyles).toContain('.chat-project-select { display: none; }')
   })
 })

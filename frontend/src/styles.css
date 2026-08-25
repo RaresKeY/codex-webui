@@ -494,6 +494,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .right-open .mobile-scrim.right { display: block; }
   .rail-panel-controls .context-rail-toggle { display: grid; }
   .chat-header > .icon-button:first-child { display: grid; }
+  .chat-project-select { display: none; }
   .metric-row { grid-template-columns: 1fr; }
   .metric-row > div { border: 0; border-bottom: 1px solid var(--line); }
   .usage-grid { grid-template-columns: 1fr 1fr; }
