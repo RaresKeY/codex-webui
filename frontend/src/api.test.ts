@@ -51,6 +51,9 @@ describe('Codex 0.147 adapters', () => {
   })
 
   it('maps deltas and authoritative context usage', () => {
+    expect(notificationUpdate({
+      method: 'thread/name/updated', params: { threadId: 'thread-1', threadName: 'Markdown rendering' },
+    })).toEqual({ conversationTitle: 'Markdown rendering' })
     expect(notificationUpdate({ method: 'item/agentMessage/delta', params: { itemId: 'a1', delta: 'Hi' } })).toMatchObject({
       event: { id: 'a1', content: 'Hi', append: true },
     })

@@ -99,6 +99,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .chat-heading > div { display: flex; gap: 7px; align-items: center; }
 .chat-heading h2 { min-width: 0; max-width: 500px; margin: 0; font-size: 13px; letter-spacing: -.02em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .chat-heading button { border: 0; background: none; color: var(--muted); display: grid; cursor: pointer; }
+.chat-heading .rename-trigger { opacity: 0; padding: 3px; border-radius: 4px; transition: opacity .15s ease, color .15s ease, background .15s ease; }
+.chat-heading > div:hover .rename-trigger, .chat-heading .rename-trigger:focus-visible { opacity: 1; }
+.chat-heading .rename-trigger:hover { color: var(--text); background: #ffffff0a; }
+.chat-name-form { min-width: 0; flex: 1; display: flex; align-items: center; gap: 3px; }
+.chat-name-form input { width: min(430px, 100%); height: 29px; border: 1px solid #487257; border-radius: 6px; outline: 0; padding: 0 8px; background: #111713; color: var(--text); font: inherit; box-shadow: 0 0 0 2px #87d4a60d; }
+.chat-name-form button { width: 25px; height: 25px; place-items: center; border-radius: 5px; }
+.chat-name-form button:hover:not(:disabled) { color: var(--text); background: #ffffff0a; }
+.chat-name-form button:disabled { opacity: .4; cursor: default; }
+.chat-name-error { display: block; margin: 3px 0 0 14px; color: #e49a9a; font-size: 8px; }
 .chat-heading > span { margin-top: 3px; color: var(--subtle); display: flex; gap: 4px; align-items: center; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-header-actions { display: flex; gap: 4px; align-items: center; }
 .turn-status-pill { height: 27px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #3b6749; border-radius: 14px; background: #17291e; color: var(--accent-strong); font-size: 8px; font-weight: 700; white-space: nowrap; box-shadow: 0 0 18px #70d3940b; }
@@ -432,7 +441,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .brand, .rail-main button, .rail-mobile-controls button { width: 36px; height: 36px; }
   .chat-header { height: 59px; padding: 0 7px; }
   .chat-surface { grid-template-rows: 59px minmax(0, 1fr) auto; }
-  .chat-heading > span, .context-button > span:last-child, .chat-header-actions > .icon-button:last-child { display: none; }
+  .chat-heading > span, .context-button > span:last-child { display: none; }
   .chat-project-select { display: none; }
   .turn-status-pill { display: none; }
   .context-button { padding: 2px 4px; border: 0; }

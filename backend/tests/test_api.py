@@ -315,6 +315,25 @@ def test_ephemeral_thread_creation_uses_public_app_server_shape(
     )
 
 
+def test_thread_name_forwards_public_app_server_shape(
+    client: TestClient, monkeypatch
+) -> None:
+    codex = client.app.state.codex
+    request = AsyncMock(return_value={})
+    monkeypatch.setattr(codex, "request", request)
+    monkeypatch.setattr(type(codex), "available", PropertyMock(return_value=True))
+
+    response = client.patch(
+        "/api/threads/thread-1/name", json={"name": "Markdown rendering"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {}
+    request.assert_awaited_once_with(
+        "thread/name/set", {"threadId": "thread-1", "name": "Markdown rendering"}
+    )
+
+
 def test_realtime_webrtc_routes_forward_generated_schema(
     client: TestClient, monkeypatch
 ) -> None:

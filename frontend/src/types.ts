@@ -140,6 +140,7 @@ export interface LiveUpdate {
   event?: StreamEvent
   turn?: TurnSignal
   contextPercent?: number
+  conversationTitle?: string
   realtime?: RealtimeSignal
 }
 

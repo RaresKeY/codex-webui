@@ -1,4 +1,5 @@
 import { demoBootstrap, demoEvents, demoFileContents } from './demo'
+import { UNTITLED_CONVERSATION } from './conversation-title'
 import type { RealtimeVoice, RealtimeVoicesList, WebRtcRealtimeVersion } from './app-server-protocol'
 import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
 
@@ -330,6 +331,7 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   const threadId = text(params.threadId)
   const turn = object(params.turn)
   const turnId = text(params.turnId ?? turn.id) || undefined
+  if (method === 'thread/name/updated') return { conversationTitle: text(params.threadName).trim() || UNTITLED_CONVERSATION }
   if (method === 'turn/started' && turnId) return { turn: { kind: 'started', turnId } }
   if (method === 'turn/completed' && turnId) {
     const status = text(turn.status)
@@ -454,6 +456,10 @@ export async function searchConversations(query: string): Promise<Conversation[]
 
 export async function assignConversationProject(conversationId: string, projectId: string): Promise<void> {
   await request(`/threads/${encodeURIComponent(conversationId)}/metadata`, { method: 'PATCH', body: JSON.stringify({ project_id: Number(projectId) }) })
+}
+
+export async function renameConversation(conversationId: string, title: string): Promise<void> {
+  await request(`/threads/${encodeURIComponent(conversationId)}/name`, { method: 'PATCH', body: JSON.stringify({ name: title.trim() }) })
 }
 
 export async function createProject(input: { name: string; description?: string; color?: string; workspace?: string }): Promise<Project> {

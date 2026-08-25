@@ -6,6 +6,8 @@ The desktop shell uses a stable left application rail plus project/conversation/
 
 Current search sends authoritative `searchTerm` queries to Codex, sorts by upstream recency, and adds local project filtering plus recent/oldest presentation. Desired expansion adds workspace, status, model, time, title, and usage dimensions. Badges should distinguish native-resumable, unavailable, running, interrupted, and archived sessions.
 
+New conversations use a fast local provisional title after the first turn is accepted: the first meaningful prompt line is cleaned and bounded for the sidebar, without a second model request or hidden transcript mutation. The header exposes inline manual rename for meaning the heuristic cannot infer. Existing or manually assigned names are never replaced automatically, and the App Server remains canonical through its name update notification.
+
 ## Gaps
 
 - User-test density and latency on Pi-class hardware and small laptops.

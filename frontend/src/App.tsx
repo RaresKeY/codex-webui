@@ -7,7 +7,8 @@ import {
   Mic, MicOff, PanelLeftClose, PanelRightClose, Play, Plus, RefreshCw, Save, Search, Settings,
   ShieldCheck, Sparkles, Terminal, Trash2, Wifi, WifiOff, X,
 } from 'lucide-react'
-import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
+import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
+import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
 import { RealtimeVoiceSession } from './realtime'
 import { exactTokenCountLabel, formatTokenCount } from './token-format'
@@ -180,16 +181,23 @@ interface ChatSurfaceProps {
   onTurnAction: (action: TurnAction) => void
   onConversationStatus: (status: Conversation['status']) => void
   onAssignProject: (projectId: string) => void
+  onRename: (title: string) => Promise<void>
   openLeft: () => void
   openRight: () => void
 }
 
-function ChatSurface({ conversation, project, projects, models, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onAssignProject, openLeft, openRight }: ChatSurfaceProps) {
+function ChatSurface({ conversation, project, projects, models, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onAssignProject, onRename, openLeft, openRight }: ChatSurfaceProps) {
   const feedRef = useRef<HTMLElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [voiceMessage, setVoiceMessage] = useState('')
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState(conversation.title)
+  const [renameError, setRenameError] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const autoTitleThread = useRef('')
+  const currentTitle = useRef(conversation.title)
   const voiceSession = useMemo(() => new RealtimeVoiceSession((state, message) => { setVoiceState(state); setVoiceMessage(message ?? '') }), [])
   const turnActive = isTurnActive(turn)
   const voiceUnavailableReason = !voiceCapability.available
@@ -207,6 +215,19 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
     if (realtimeSignal) void voiceSession.handle(realtimeSignal).catch(error => { setVoiceState('error'); setVoiceMessage(error instanceof Error ? error.message : 'Realtime voice failed.') })
   }, [realtimeSignal, voiceSession])
   useEffect(() => () => { void voiceSession.stop(true).catch(() => undefined) }, [conversation.id, voiceSession])
+  useEffect(() => { currentTitle.current = conversation.title }, [conversation.title])
+  const submitRename = (event: FormEvent) => {
+    event.preventDefault()
+    const nextTitle = renameValue.trim()
+    if (!nextTitle || savingName) return
+    currentTitle.current = nextTitle
+    setSavingName(true)
+    setRenameError('')
+    void onRename(nextTitle)
+      .then(() => setRenaming(false))
+      .catch(() => setRenameError('The name could not be saved. Retry after checking the local service.'))
+      .finally(() => setSavingName(false))
+  }
   const toggleVoice = () => {
     if (voiceState === 'live' || voiceState === 'connecting') void voiceSession.stop(true).catch(error => { setVoiceState('error'); setVoiceMessage(error instanceof Error ? error.message : 'Could not stop realtime voice.') })
     else void voiceSession.start(conversation.id).catch(() => undefined)
@@ -219,6 +240,16 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
     onConversationStatus('running')
     void sendPrompt(conversation.id, content, model, effort).then(result => {
       onTurnAction({ type: 'acknowledged', requestId, turnId: result.turnId })
+      if (isUntitledConversation(currentTitle.current) && autoTitleThread.current !== conversation.id) {
+        const provisionalTitle = deriveConversationTitle(content)
+        autoTitleThread.current = conversation.id
+        currentTitle.current = provisionalTitle
+        void onRename(provisionalTitle).catch(() => {
+          autoTitleThread.current = ''
+          currentTitle.current = conversation.title
+          setRenameError('The provisional name could not be saved. You can rename this conversation manually.')
+        })
+      }
     }).catch(error => {
       onTurnAction({ type: 'request-failed', requestId, message: 'Codex could not start this turn.' })
       onConversationStatus('failed')
@@ -232,8 +263,13 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
   return <main className="chat-surface">
     <header className="chat-header">
       <IconButton label="Open conversations" onClick={openLeft}><Menu size={18} /></IconButton>
-      <div className="chat-heading"><div><StatusDot status={conversation.status} /><h2>{conversation.title}</h2></div><span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span></div>
-      <div className="chat-header-actions">{turnActive && <span className="turn-status-pill" role="status"><RefreshCw size={11} className="spin" />{turn.phase === 'waiting' ? 'Waiting for Codex' : 'Codex responding'}</span>}<label className="chat-project-select" title="Assign project"><FolderGit2 size={13} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select><ChevronDown size={11} /></label><ConnectionPill state={connection} /><button className="context-button" title="Context usage"><ContextRing percent={conversation.contextPercent} /><span>Context<br /><strong>{conversation.contextPercent}% used</strong></span></button><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton><IconButton label="More conversation options (not available yet)" disabled><MoreHorizontal size={18} /></IconButton></div>
+      <div className="chat-heading">
+        <div><StatusDot status={conversation.status} />{renaming
+          ? <form className="chat-name-form" onSubmit={submitRename}><input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { setRenaming(false); setRenameValue(conversation.title); setRenameError('') } }} aria-label="Conversation name" /><button type="submit" disabled={!renameValue.trim() || savingName} aria-label="Save conversation name"><Check size={14} /></button><button type="button" disabled={savingName} onClick={() => { setRenaming(false); setRenameValue(conversation.title); setRenameError('') }} aria-label="Cancel rename"><X size={14} /></button></form>
+          : <><h2>{conversation.title}</h2><button type="button" className="rename-trigger" onClick={() => { setRenameValue(conversation.title); setRenameError(''); setRenaming(true) }} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></>}</div>
+        <span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span>{renameError && <small className="chat-name-error" role="alert">{renameError}</small>}
+      </div>
+      <div className="chat-header-actions">{turnActive && <span className="turn-status-pill" role="status"><RefreshCw size={11} className="spin" />{turn.phase === 'waiting' ? 'Waiting for Codex' : 'Codex responding'}</span>}<label className="chat-project-select" title="Assign project"><FolderGit2 size={13} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select><ChevronDown size={11} /></label><ConnectionPill state={connection} /><button className="context-button" title="Context usage"><ContextRing percent={conversation.contextPercent} /><span>Context<br /><strong>{conversation.contextPercent}% used</strong></span></button><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton></div>
     </header>
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       <div className="session-divider"><span>Session resumed</span><small>Today · {conversation.model} · {conversation.cwd}</small></div>
@@ -566,6 +602,7 @@ export default function App() {
     const applyUpdate = (update: LiveUpdate) => {
       if (update.event) setEvents(current => mergeStreamEvent(current, update.event!))
       if (update.contextPercent !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, contextPercent: update.contextPercent! } : conversation) } : current)
+      if (update.conversationTitle !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, title: update.conversationTitle! } : conversation) } : current)
       if (update.realtime) setRealtimeSignal(update.realtime)
       if (update.turn) {
         const signal = update.turn
@@ -621,6 +658,16 @@ export default function App() {
     setActiveId(conversation.id)
     showView('chat')
   }
+  const renameConversationTitle = async (conversationId: string, title: string) => {
+    const previous = data.conversations.find(conversation => conversation.id === conversationId)?.title ?? 'Untitled conversation'
+    setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === conversationId ? { ...conversation, title } : conversation) } : current)
+    try {
+      await renameConversation(conversationId, title)
+    } catch (error) {
+      setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === conversationId && conversation.title === title ? { ...conversation, title: previous } : conversation) } : current)
+      throw error
+    }
+  }
   return <div className={`app-shell ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
     <AppRail view={view} setView={showView} openLeft={openLeft} openRight={openRight} />
     {leftOpen && <ChatSidebar data={data} activeId={activeId} onSelect={selectConversation} onClose={() => setLeftOpen(false)} onNewChat={() => {
@@ -640,7 +687,7 @@ export default function App() {
     }} />}
     <div className="mobile-scrim left" onClick={() => setLeftOpen(false)} />
     <div className="content-area">
-      {view === 'chat' && activeConversation && <ChatSurface conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} openLeft={openLeft} openRight={openRight} />}
+      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} openLeft={openLeft} openRight={openRight} />}
       {view === 'projects' && <ProjectsPage projects={data.projects} conversations={data.conversations} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} />}
       {view === 'schedules' && <SchedulesPage schedules={data.schedules} onAdd={schedule => setData(current => current ? { ...current, schedules: [schedule, ...current.schedules] } : current)} onUpdate={schedule => setData(current => current ? { ...current, schedules: current.schedules.map(item => item.id === schedule.id ? schedule : item) } : current)} />}
       {view === 'images' && <ImagesPage data={data} onChange={images => setData(current => current ? { ...current, images } : current)} />}
