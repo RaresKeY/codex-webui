@@ -126,12 +126,17 @@ function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; 
       </div>
     </article>
   }
+  if (event.kind === 'reasoning' && !event.content && event.state !== 'running') return null
   const Icon = eventIcons[event.kind]
   return <article className={`event-card ${event.kind} ${event.state ?? ''}`}>
     <div className="event-icon"><Icon size={15} /></div>
     <div className="event-content">
       <header><span>{event.title ?? event.kind}</span><span className={`event-state ${event.state}`}>{event.state === 'running' && <RefreshCw size={11} className="spin" />}{event.state}</span><time>{event.timestamp}</time></header>
-      {event.kind === 'command' ? <pre><code><span className="prompt">$</span> {event.content}</code></pre> : <p className={event.kind === 'file' ? 'file-lines' : ''}>{event.content}</p>}
+      {event.kind === 'command'
+        ? <pre><code><span className="prompt">$</span> {event.content}</code></pre>
+        : event.kind === 'reasoning' && !event.content
+          ? <p className="reasoning-waiting" role="status">Preparing a readable summary…</p>
+          : <p className={event.kind === 'file' ? 'file-lines' : ''}>{event.content}</p>}
       {event.meta && <div className="event-meta">{Object.entries(event.meta).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}
       {event.kind === 'approval' && event.state === 'pending' && <>{approvalError && <p className="approval-error" role="alert">{approvalError}</p>}<div className="approval-actions">{!event.meta?.unsupported && <button className="button primary" disabled={responding} onClick={() => answerApproval(true)}><Check size={14} />{responding ? 'Sending…' : 'Allow once'}</button>}<button className="button" disabled={responding} onClick={() => answerApproval(false)}><X size={14} />{responding ? 'Sending…' : event.meta?.unsupported ? 'Cancel safely' : 'Deny'}</button></div></>}
     </div>

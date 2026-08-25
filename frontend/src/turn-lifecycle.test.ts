@@ -63,6 +63,18 @@ describe('stream event merging', () => {
     expect(events[0]).toMatchObject({ content: 'Hello', state: 'done', append: false })
   })
 
+  it('preserves streamed readable reasoning when a completed item has no summary text', () => {
+    let events = mergeStreamEvent([], {
+      id: 'reasoning-1', kind: 'reasoning', title: 'Reasoning summary', content: 'Inspect',
+      timestamp: 'Now', state: 'running', append: true,
+    })
+    events = mergeStreamEvent(events, {
+      id: 'reasoning-1', kind: 'reasoning', title: 'Reasoning summary', content: '',
+      timestamp: 'Now', state: 'done', append: false,
+    })
+    expect(events[0]).toMatchObject({ content: 'Inspect', state: 'done', append: false })
+  })
+
   it('settles unfinished item affordances at terminal turn completion but leaves realtime transcripts alone', () => {
     const settled = settleStreamEvents([
       delta('partial'),

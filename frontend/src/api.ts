@@ -259,7 +259,7 @@ export function normalizeItem(raw: unknown, index: number): StreamEvent | null {
   if (type.includes('user')) return { id, kind: 'message', role: 'user', content: contentText(item.content ?? item.message ?? item.input), timestamp, state }
   if (type.includes('agent') || type.includes('assistant') || type === 'message') return { id, kind: 'message', role: 'assistant', content: contentText(item.text ?? item.content ?? item.message ?? item.output), timestamp, state }
   if (type === 'plan' || type.includes('plan')) return { id, kind: 'reasoning', title: 'Plan', content: contentText(item.text ?? item.content), timestamp, state: state ?? 'done' }
-  if (type.includes('reason')) return { id, kind: 'reasoning', title: 'Reasoning summary', content: contentText(item.summary ?? item.content), timestamp, state: state ?? 'done' }
+  if (type.includes('reason')) return { id, kind: 'reasoning', title: 'Reasoning summary', content: contentText(item.summary), timestamp, state: state ?? 'done' }
   if (type.includes('command') || type.includes('exec')) {
     const command = contentText(item.command ?? item.content)
     const output = contentText(item.aggregatedOutput)
@@ -357,6 +357,7 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   if (method === 'item/agentMessage/delta') return { event: { id: String(params.itemId), kind: 'message', role: 'assistant', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'delta', turnId } }
   if (method === 'item/plan/delta') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Plan', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/reasoning/summaryTextDelta') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Reasoning summary', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
+  if (method === 'item/reasoning/summaryPartAdded') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Reasoning summary', content: number(params.summaryIndex) > 0 ? '\n\n' : '', timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/reasoning/textDelta') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Reasoning', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/commandExecution/outputDelta') return { event: { id: String(params.itemId), kind: 'command', title: 'Command output', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/fileChange/outputDelta') return { event: { id: String(params.itemId), kind: 'file', title: 'Workspace changes', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }

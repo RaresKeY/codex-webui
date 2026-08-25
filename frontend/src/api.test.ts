@@ -9,6 +9,12 @@ describe('Codex 0.147 adapters', () => {
     expect(normalizeItem({ id: 'p1', type: 'plan', text: 'Inspect, then change.' }, 1)).toMatchObject({
       id: 'p1', kind: 'reasoning', title: 'Plan', content: 'Inspect, then change.',
     })
+    expect(normalizeItem({ id: 'r1', type: 'reasoning', summary: ['Inspect the adapter.', 'Verify the result.'], content: ['private raw reasoning'] }, 2)).toMatchObject({
+      id: 'r1', kind: 'reasoning', title: 'Reasoning summary', content: 'Inspect the adapter.\nVerify the result.',
+    })
+    expect(normalizeItem({ id: 'r2', type: 'reasoning', summary: [], content: ['private raw reasoning'] }, 3)).toMatchObject({
+      id: 'r2', kind: 'reasoning', title: 'Reasoning summary', content: '',
+    })
   })
 
   it('marks pinned system-error threads as failed', () => {
@@ -47,6 +53,12 @@ describe('Codex 0.147 adapters', () => {
   it('maps deltas and authoritative context usage', () => {
     expect(notificationUpdate({ method: 'item/agentMessage/delta', params: { itemId: 'a1', delta: 'Hi' } })).toMatchObject({
       event: { id: 'a1', content: 'Hi', append: true },
+    })
+    expect(notificationUpdate({ method: 'item/reasoning/summaryTextDelta', params: { itemId: 'r1', summaryIndex: 0, delta: 'Inspect' } })).toMatchObject({
+      event: { id: 'r1', content: 'Inspect', append: true },
+    })
+    expect(notificationUpdate({ method: 'item/reasoning/summaryPartAdded', params: { itemId: 'r1', summaryIndex: 1 } })).toMatchObject({
+      event: { id: 'r1', content: '\n\n', append: true },
     })
     expect(notificationUpdate({
       method: 'thread/tokenUsage/updated',

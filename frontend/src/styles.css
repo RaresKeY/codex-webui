@@ -151,6 +151,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .event-content header { height: 31px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--line-soft); color: #bdc7c1; font-size: 9px; font-weight: 600; }
 .event-content header time { margin-left: auto; color: var(--subtle); font-size: 7px; font-weight: 400; }
 .event-content p { margin: 0; padding: 9px 11px; color: #9fa9a3; font-size: 10px; line-height: 1.6; white-space: pre-wrap; }
+.event-content .reasoning-waiting { color: var(--subtle); font-style: italic; }
 .event-content .file-lines { font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1.8; color: #aebcb4; }
 .event-content pre { margin: 0; padding: 9px 11px; overflow-x: auto; background: #0b0e0d; }
 .event-content code, .code-preview, .code-editor { font-family: 'DM Mono', ui-monospace, monospace; font-size: 9px; line-height: 1.65; color: #b8c6be; }
