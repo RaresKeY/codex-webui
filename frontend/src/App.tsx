@@ -4,12 +4,13 @@ import {
   ChevronRight, Circle, Clock3, Code2, Copy, Cpu, Database, Download, Edit3,
   File, FileCode2, FileJson, FileText, Files, Folder, FolderGit2, FolderOpen, Gauge,
   GitBranch, HardDrive, Image, Images, LayoutGrid, Menu, MessageSquareText, MoreHorizontal,
-  Mic, MicOff, PanelLeftClose, PanelRightClose, Play, Plus, RefreshCw, Save, Search, Settings,
+  Mic, MicOff, PanelLeftClose, PanelLeftOpen, PanelRightClose, Play, Plus, RefreshCw, Save, Search, Settings,
   ShieldCheck, Sparkles, Terminal, Trash2, Wifi, WifiOff, X,
 } from 'lucide-react'
 import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
+import { groupEventFeed } from './event-groups'
 import { MarkdownContent } from './MarkdownContent'
 import { RealtimeVoiceSession } from './realtime'
 import { exactTokenCountLabel, formatTokenCount } from './token-format'
@@ -36,7 +37,7 @@ function ConnectionPill({ state }: { state: ConnectionState }) {
   return <span className={`connection-pill ${state}`}>{online ? <Wifi size={12} /> : <WifiOff size={12} />}{online ? 'Local' : state === 'demo' ? 'Demo data' : state}</span>
 }
 
-function AppRail({ view, setView, openLeft, openRight }: { view: View; setView: (v: View) => void; openLeft: () => void; openRight: () => void }) {
+function AppRail({ view, setView, leftOpen, openLeft, toggleLeft, openRight }: { view: View; setView: (v: View) => void; leftOpen: boolean; openLeft: () => void; toggleLeft: () => void; openRight: () => void }) {
   const items: Array<[View, string, ComponentType<{ size?: number }>]> = [
     ['chat', 'Chats', MessageSquareText], ['projects', 'Projects', LayoutGrid], ['schedules', 'Scheduled tasks', CalendarClock],
     ['images', 'Image library', Images], ['settings', 'Settings', Settings],
@@ -44,11 +45,11 @@ function AppRail({ view, setView, openLeft, openRight }: { view: View; setView: 
   return <nav className="app-rail" aria-label="Application">
     <button className="brand" onClick={() => setView('chat')} aria-label="Codex Web UI home"><Sparkles size={19} /><span>CW</span></button>
     <div className="rail-main">
-      {items.map(([key, label, Icon]) => <button key={key} onClick={() => setView(key)} className={view === key ? 'active' : ''} aria-label={label} title={label}><Icon size={19} /></button>)}
+      {items.map(([key, label, Icon]) => <button key={key} onClick={() => { if (key === 'chat') { if (view === 'chat') toggleLeft(); else { setView('chat'); openLeft() } } else setView(key) }} className={view === key ? 'active' : ''} aria-label={key === 'chat' && view === 'chat' ? `${leftOpen ? 'Collapse' : 'Expand'} conversations` : label} aria-expanded={key === 'chat' ? leftOpen : undefined} title={key === 'chat' && view === 'chat' ? `${leftOpen ? 'Collapse' : 'Expand'} conversations` : label}><Icon size={19} /></button>)}
     </div>
-    <div className="rail-mobile-controls">
-      <button onClick={openLeft} aria-label="Open chats"><PanelLeftClose size={19} /></button>
-      <button onClick={openRight} aria-label="Open context panel"><PanelRightClose size={19} /></button>
+    <div className="rail-panel-controls">
+      <button onClick={toggleLeft} className={!leftOpen ? 'expand-panel' : ''} aria-label={`${leftOpen ? 'Collapse' : 'Expand'} conversations`} aria-expanded={leftOpen} title={`${leftOpen ? 'Collapse' : 'Expand'} conversations`}>{leftOpen ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}</button>
+      <button className="context-rail-toggle" onClick={openRight} aria-label="Open context panel" title="Open context panel"><PanelRightClose size={19} /></button>
     </div>
     <div className="avatar" title="Local user">RK</div>
   </nav>
@@ -102,6 +103,36 @@ function ChatSidebar({ data, activeId, onSelect, onClose, onNewChat }: { data: B
 
 const eventIcons: Record<EventKind, ComponentType<{ size?: number }>> = { message: Bot, reasoning: Sparkles, command: Terminal, file: FileCode2, approval: ShieldCheck, status: Activity }
 
+function EventState({ event }: { event: StreamEvent }) {
+  return <span className={`event-state ${event.state}`}>{event.state === 'running' && <RefreshCw size={11} className="spin" />}{event.state}</span>
+}
+
+function CommandCard({ event }: { event: StreamEvent }) {
+  const commandLine = event.content.split('\n').find(line => line.trim())?.trim() || event.title || 'Command'
+  return <details className={`command-card ${event.state ?? ''}`}>
+    <summary><ChevronRight size={13} className="disclosure-chevron" /><Terminal size={13} /><span><strong>{event.title ?? 'Command'}</strong><code>{commandLine}</code></span><EventState event={event} /><time>{event.timestamp}</time></summary>
+    <div className="command-card-body"><pre><code><span className="prompt">$</span> {event.content}</code></pre>{event.meta && <div className="event-meta">{Object.entries(event.meta).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}</div>
+  </details>
+}
+
+function CommandGroup({ commands }: { commands: StreamEvent[] }) {
+  const aggregateState: StreamEvent['state'] = commands.some(command => command.state === 'running')
+    ? 'running'
+    : commands.some(command => command.state === 'failed')
+      ? 'failed'
+      : commands.every(command => command.state === 'done')
+        ? 'done'
+        : 'pending'
+  const aggregateEvent = { ...commands.at(-1)!, state: aggregateState }
+  const label = aggregateState === 'running'
+    ? `${commands.length} ${commands.length === 1 ? 'command' : 'commands'} running`
+    : `${commands.length} ${commands.length === 1 ? 'command' : 'commands'} ran`
+  return <details className={`command-group ${aggregateState}`}>
+    <summary><span className="event-icon"><Terminal size={15} /></span><span className="command-group-label"><strong>{label}</strong><small>Show command activity</small></span><EventState event={aggregateEvent} /><time>{aggregateEvent.timestamp}</time><ChevronRight size={14} className="disclosure-chevron" /></summary>
+    <div className="command-group-items">{commands.map(command => <CommandCard event={command} key={command.id} />)}</div>
+  </details>
+}
+
 function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; conversationId: string; onApproval: (id: string, approved: boolean) => void }) {
   const [responding, setResponding] = useState(false)
   const [approvalError, setApprovalError] = useState('')
@@ -130,15 +161,14 @@ function EventCard({ event, conversationId, onApproval }: { event: StreamEvent; 
       </div>
     </article>
   }
+  if (event.kind === 'command') return <CommandCard event={event} />
   if (event.kind === 'reasoning' && !event.content && event.state !== 'running') return null
   const Icon = eventIcons[event.kind]
   return <article className={`event-card ${event.kind} ${event.state ?? ''}`}>
     <div className="event-icon"><Icon size={15} /></div>
     <div className="event-content">
-      <header><span>{event.title ?? event.kind}</span><span className={`event-state ${event.state}`}>{event.state === 'running' && <RefreshCw size={11} className="spin" />}{event.state}</span><time>{event.timestamp}</time></header>
-      {event.kind === 'command'
-        ? <pre><code><span className="prompt">$</span> {event.content}</code></pre>
-        : event.kind === 'reasoning' && !event.content
+      <header><span>{event.title ?? event.kind}</span><EventState event={event} /><time>{event.timestamp}</time></header>
+      {event.kind === 'reasoning' && !event.content
           ? <p className="reasoning-waiting" role="status">Preparing a readable summary…</p>
           : event.kind === 'reasoning'
             ? <MarkdownContent source={event.content} compact />
@@ -187,11 +217,12 @@ interface ChatSurfaceProps {
   onConversationStatus: (status: Conversation['status']) => void
   onAssignProject: (projectId: string) => void
   onRename: (title: string) => Promise<void>
-  openLeft: () => void
+  leftOpen: boolean
+  toggleLeft: () => void
   openRight: () => void
 }
 
-function ChatSurface({ conversation, project, projects, models, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onAssignProject, onRename, openLeft, openRight }: ChatSurfaceProps) {
+function ChatSurface({ conversation, project, projects, models, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
   const feedRef = useRef<HTMLElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -276,9 +307,10 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
     })
   }
   const hasRunningAssistant = events.some(event => event.kind === 'message' && event.role === 'assistant' && event.state === 'running')
-  return <main className="chat-surface">
+  const feedEntries = groupEventFeed(events)
+  return <main className={`chat-surface ${leftOpen ? '' : 'left-panel-closed'}`}>
     <header className="chat-header">
-      <IconButton label="Open conversations" onClick={openLeft}><Menu size={18} /></IconButton>
+      <IconButton label={`${leftOpen ? 'Collapse' : 'Expand'} conversations`} onClick={toggleLeft}>{leftOpen ? <Menu size={18} /> : <PanelLeftOpen size={18} />}</IconButton>
       <div className="chat-heading">
         <div><StatusDot status={conversation.status} /><h2 className="conversation-title" onDoubleClick={openRename} title="Double-click to rename">{conversation.title}</h2><button type="button" className="rename-trigger" onClick={openRename} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></div>
         <span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span>{renameError && !renaming && <small className="chat-name-error" role="alert">{renameError}</small>}
@@ -287,7 +319,9 @@ function ChatSurface({ conversation, project, projects, models, events, turn, co
     </header>
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       <div className="session-divider"><span>Session resumed</span><small>Today · {conversation.model} · {conversation.cwd}</small></div>
-      {events.map(event => <EventCard event={event} conversationId={conversation.id} key={event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
+      {feedEntries.map(entry => entry.type === 'commands'
+        ? <CommandGroup commands={entry.commands} key={entry.id} />
+        : <EventCard event={entry.event} conversationId={conversation.id} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
       {turn.phase === 'waiting' && !hasRunningAssistant && <article className="message assistant streaming turn-placeholder"><div className="message-avatar"><Bot size={17} /></div><div className="message-body"><div className="message-author">Codex<span className="response-state"><RefreshCw size={10} className="spin" />Waiting</span></div><div className="response-placeholder" role="status"><span /><span /><span />Preparing a response</div></div></article>}
       {turnActive && <div className="turn-activity" role="status" aria-live="polite"><RefreshCw size={12} className="spin" /><span><strong>{turn.phase === 'waiting' ? 'Turn in progress' : 'Response streaming'}</strong><small>{turn.phase === 'waiting' ? 'Waiting for the first Codex event…' : 'New text will appear here as it arrives.'}</small></span></div>}
       <div ref={endRef} />
@@ -666,6 +700,7 @@ export default function App() {
   const activeConversation = data.conversations.find(chat => chat.id === activeId) ?? data.conversations[0]
   const activeProject = data.projects.find(project => project.id === activeConversation?.projectId)
   const openLeft = () => { if (isNarrowLayout()) setRightOpen(false); setLeftOpen(true) }
+  const toggleLeft = () => { if (!leftOpen && isNarrowLayout()) setRightOpen(false); setLeftOpen(value => !value) }
   const openRight = () => { if (isNarrowLayout()) setLeftOpen(false); setRightOpen(true) }
   const showView = (next: View) => { setView(next); if (isNarrowLayout()) { setLeftOpen(false); setRightOpen(false) } }
   const selectConversation = (conversation: Conversation) => {
@@ -684,7 +719,7 @@ export default function App() {
     }
   }
   return <div className={`app-shell ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
-    <AppRail view={view} setView={showView} openLeft={openLeft} openRight={openRight} />
+    <AppRail view={view} setView={showView} leftOpen={leftOpen} openLeft={openLeft} toggleLeft={toggleLeft} openRight={openRight} />
     {leftOpen && <ChatSidebar data={data} activeId={activeId} onSelect={selectConversation} onClose={() => setLeftOpen(false)} onNewChat={() => {
       void createConversation({ projectId: activeProject?.id, cwd: activeProject?.path !== '.' ? activeProject?.path : activeConversation?.cwd, model: data.models[0] }).then(conversation => {
         setData(current => current ? { ...current, conversations: [conversation, ...current.conversations] } : current)
@@ -702,7 +737,7 @@ export default function App() {
     }} />}
     <div className="mobile-scrim left" onClick={() => setLeftOpen(false)} />
     <div className="content-area">
-      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} openLeft={openLeft} openRight={openRight} />}
+      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
       {view === 'projects' && <ProjectsPage projects={data.projects} conversations={data.conversations} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} />}
       {view === 'schedules' && <SchedulesPage schedules={data.schedules} onAdd={schedule => setData(current => current ? { ...current, schedules: [schedule, ...current.schedules] } : current)} onUpdate={schedule => setData(current => current ? { ...current, schedules: current.schedules.map(item => item.id === schedule.id ? schedule : item) } : current)} />}
       {view === 'images' && <ImagesPage data={data} onChange={images => setData(current => current ? { ...current, images } : current)} />}

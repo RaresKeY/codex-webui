@@ -54,6 +54,8 @@ export const demoEvents: StreamEvent[] = [
   { id: 'e1', kind: 'message', role: 'user', content: 'Build the frontend shell with resumable chats, a live Codex event stream, and an IDE-style file browser.', timestamp: '17:41' },
   { id: 'e2', kind: 'reasoning', title: 'Approach', content: '**Plan**\n\n1. Establish the application frame.\n2. Connect session and workspace contracts.\n3. Keep the UI useful while the local service starts.', timestamp: '17:41', state: 'done' },
   { id: 'e3', kind: 'command', title: 'Inspect workspace', content: 'rg --files frontend backend specs design | sort', timestamp: '17:42', state: 'done', meta: { exitCode: 0, duration: '86ms' } },
+  { id: 'e3b', kind: 'command', title: 'Inspect application shell', content: "sed -n '1,220p' frontend/src/App.tsx", timestamp: '17:42', state: 'done', meta: { exitCode: 0, duration: '41ms' } },
+  { id: 'e3c', kind: 'command', title: 'Check worktree', content: 'git status --short', timestamp: '17:43', state: 'done', meta: { exitCode: 0, duration: '24ms' } },
   { id: 'e4', kind: 'file', title: 'Frontend foundation', content: 'frontend/src/App.tsx\nfrontend/src/api.ts\nfrontend/src/styles.css', timestamp: '17:43', state: 'done', meta: { added: 412, removed: 0 } },
   { id: 'e5', kind: 'approval', title: 'Approval requested', content: 'Allow Codex to run `npm install` inside this workspace?', timestamp: '17:44', state: 'pending' },
   { id: 'e6', kind: 'message', role: 'assistant', content: '## Workspace ready\n\nThe main workspace is in place:\n\n- resumable conversations\n- streamed Codex events\n- an IDE-style file browser\n\n```tsx\n<Workspace localFirst />\n```\n\nI’m tightening the responsive behavior and verifying the production build now.', timestamp: '17:45' },

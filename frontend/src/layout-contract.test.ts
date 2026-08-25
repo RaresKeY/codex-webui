@@ -12,6 +12,8 @@ describe('application shell layout contract', () => {
     expect(styles).toContain('.chat-sidebar { grid-area: conversations;')
     expect(styles).toContain('.content-area { grid-area: conversation;')
     expect(styles).toContain('.context-panel { grid-area: context;')
+    expect(styles).toContain('.rail-panel-controls { width: 100%; display: flex;')
+    expect(styles).toContain('.chat-surface.left-panel-closed .chat-header > .icon-button:first-child { display: grid; }')
   })
 
   it('reduces to rail plus conversation and overlays both drawers at the narrow breakpoint', () => {
