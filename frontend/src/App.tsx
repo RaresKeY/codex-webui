@@ -10,6 +10,7 @@ import {
 import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import type { RoutingDecision, RoutingStage } from './api'
 import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
+import { ConversationListItem } from './ConversationListItem'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
 import { groupEventFeed } from './event-groups'
 import { MarkdownContent } from './MarkdownContent'
@@ -74,7 +75,7 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
     </div>
     <div className="chat-list" aria-live="polite">
       <div className="list-label"><span>{chats.length} resumable</span><button aria-label={`Sort ${newestFirst ? 'oldest' : 'newest'} first`} onClick={() => setNewestFirst(value => !value)}><ArrowUp size={13} className={newestFirst ? '' : 'flip'} /> {newestFirst ? 'Recent' : 'Oldest'}</button></div>
-      {chats.map(chat => <button className={`chat-row ${chat.id === activeId && view === 'chat' ? 'active' : ''}`} key={chat.id} onClick={() => onSelect(chat)} title={`${chat.title} · ${chat.model}`}><span className="chat-title">{chat.status === 'running' && <StatusDot status={chat.status} />}{chat.title}</span>{chat.status === 'running' && <span className="chat-running-label">Working</span>}</button>)}
+      {chats.map(chat => <ConversationListItem key={chat.id} conversation={chat} project={data.projects.find(project => project.id === chat.projectId)} active={chat.id === activeId && view === 'chat'} onSelect={() => onSelect(chat)} statusIndicator={chat.status === 'running' ? <StatusDot status={chat.status} /> : undefined} />)}
       {!chats.length && <div className="empty-state compact"><Search size={22} /><p>No conversations match.</p></div>}
     </div>
     <footer className="sidebar-footer"><button className="profile-button" onClick={() => setView('settings')} aria-label="Open settings"><span className="avatar"><Terminal size={16} /></span><span><strong>Local workspace</strong><small>{data.demo ? 'Preview mode' : 'Connected through Codex'}</small></span><Settings size={17} /></button></footer>

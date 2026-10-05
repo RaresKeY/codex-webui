@@ -1,8 +1,10 @@
 # Product scope
 
-Codex WebUI 2 is a separate successor project derived from `../codex-webui` at `4b995df`. It retains native thread continuation, streaming, inline approvals, workspace tools, projects, schedules, images, usage and experimental voice. The original project remains unchanged.
+Codex WebUI 2 is a successor derived from WebUI 1 at `4b995df`, retaining its separate local checkout while taking over the original repository's remotes. It retains native thread continuation, streaming, inline approvals, workspace tools, projects, schedules, images, usage and experimental voice. WebUI 1's tracked source and complete local Git refs are archived externally; its local checkout remains an archival reference.
 
 `frontend/src/App.tsx` and `styles.css` own a single text-labeled sidebar, centered readable transcript, right-aligned user bubbles, quiet model provenance, collapsed command/public-thought disclosures and compact auto-routed composer. The optional context panel starts closed. Below 1000px navigation and context become exclusive drawers. Empty workspaces expose a New chat action; new empty threads expose a welcome message and composer.
+
+Conversation rows stay title-only. `ConversationListItem.tsx` exposes the preview, project name, last-updated label and model through a hover summary and an independent details disclosure. The disclosure is available to keyboard and touch users without opening the conversation; missing project records fall back to the workspace directory name. The selection button also references the details as its accessible description.
 
 Every text chat ask uses the ordered Jev flow in `jev_routing.md`. Failed drafts remain editable. IME Enter does not submit during composition. Live/routing state blocks duplicate submit; changing conversation cancels pre-submission work. Projects, schedules, images and voice retain inherited behavior. Browser remains a planned context tool.
 

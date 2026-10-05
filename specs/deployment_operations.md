@@ -10,6 +10,8 @@ Optional `tools/run-local.sh` serves the same built frontend on loopback using a
 
 Generated distribution files are temporary current candidates. Retain the user-requested local image, not archives or accumulated older builds. No registry publication is requested or configured.
 
+Source hosting uses the project’s public origin. Authentication and any additional remotes belong in local Git configuration, outside committed project documentation.
+
 ## Gaps
 
 - amd64 image/runtime is the current target; no ARM64 image/runtime evidence yet.

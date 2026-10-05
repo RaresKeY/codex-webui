@@ -1,6 +1,6 @@
 # Codex WebUI 2
 
-A separate, local Codex chat app with a quieter ChatGPT-style interface. It reuses the original `../codex-webui` backend, native thread history, approvals, workspace tools, projects, schedules, images, and experimental voice adapter. The original checkout is unchanged.
+A local Codex chat app with a quieter ChatGPT-style interface, succeeding WebUI 1 in [RaresKeY/codex-webui](https://github.com/RaresKeY/codex-webui). It retains native thread history, approvals, workspace tools, projects, schedules, images, and the experimental voice adapter. WebUI 1's tracked source and complete Git history are archived externally; its local checkout remains available as an archival reference.
 
 One sidebar, readable conversations, user message bubbles, a compact composer, and optional workspace tools keep chat central. Command output and public thought summaries expand on demand. Desktop navigation collapses; phone navigation and context use exclusive drawers.
 

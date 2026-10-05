@@ -2,6 +2,8 @@
 
 One quiet sidebar and a readable conversation form the primary workspace. Neutral charcoal surfaces, generous spacing, restrained icons and a compact rounded composer provide a familiar ChatGPT-style chat experience. Keep local workspace identity subtle and functional; preserve approvals, commands, native history and tool detail through progressive disclosure.
 
+Keep conversation previews, project names and timestamps behind hover summaries and a small details disclosure. Show its control on hover, keyboard focus and touch layouts; expanding details must not navigate away from the current conversation.
+
 Every text ask uses automatic Jev model/effort selection enforced by the backend. Show choosing, switching and sending state; show selected model provenance; keep the exact draft on errors and preserve whitespace when sending. Expose workspace tools from a collapsed context panel. Projects, scheduled tasks, images and settings belong in the single sidebar. On phones navigation and context are exclusive drawers.
 
 ## Gaps
