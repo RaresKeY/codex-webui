@@ -132,6 +132,7 @@ class TaskScheduler:
                         "cwd": cwd,
                         "approvalPolicy": self.approval_policy,
                         "sandbox": self.sandbox,
+                        "historyMode": "legacy",
                     },
                 )
                 thread = result.get("thread", result) if isinstance(result, dict) else {}

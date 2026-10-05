@@ -21,3 +21,8 @@ podman run --rm --network=none --userns=keep-id --user "$(id -u):$(id -g)" \
   --cap-drop=ALL --security-opt=no-new-privileges --read-only --tmpfs /tmp:rw \
   --volume "$ROOT/backend:/checks:ro" --entrypoint python "$IMAGE" \
   -m pytest /checks/tests -q -p no:cacheprovider
+# Exercise the actual standalone binary, not only mocked protocol responses.
+podman run --rm --network=none --userns=keep-id --user "$(id -u):$(id -g)" \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only --tmpfs /tmp:rw \
+  --volume "$ROOT/tools:/checks/tools:ro" \
+  --entrypoint python "$IMAGE" /checks/tools/check_thread_lifecycle.py

@@ -399,9 +399,9 @@ export async function loadConversationSnapshot(conversationId: string, demoMode 
     try { approvals = pendingApprovals(await request<unknown>('/approvals'), conversationId) } catch { /* History remains authoritative if approval hydration fails. */ }
     return { events: [...eventsFromThread(thread), ...approvals], turn: normalizeThreadLifecycle(thread) }
   }
-  catch {
+  catch (error) {
     return {
-      events: demoMode && !conversationId.startsWith('c') ? [] : demoMode ? demoEvents : [{ id: `history-error-${conversationId}`, kind: 'status', title: 'History unavailable', content: 'The local service could not read this conversation. Retry after checking the Codex connection.', timestamp: 'Now', state: 'failed' }],
+      events: demoMode && !conversationId.startsWith('c') ? [] : demoMode ? demoEvents : [{ id: `history-error-${conversationId}`, kind: 'status', title: 'History unavailable', content: error instanceof ApiError && error.status === 409 ? error.message : 'The local service could not read this conversation. Retry after checking the Codex connection.', timestamp: 'Now', state: 'failed' }],
       turn: { phase: 'idle' },
     }
   }

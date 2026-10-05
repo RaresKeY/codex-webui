@@ -37,6 +37,8 @@ class CompletingCodex:
 
     async def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((method, params))
+        if method == "thread/start":
+            return {"thread": {"id": "new-thread"}}
         if method == "turn/start":
             if self.complete:
                 assert self.events
@@ -86,3 +88,15 @@ async def test_manual_runs_share_lease_and_are_cancelled_on_stop(tmp_path: Path)
     await scheduler.stop()
     assert scheduler._running_task_ids == set()
     assert scheduler._active_tasks == set()
+
+
+@pytest.mark.asyncio
+async def test_new_scheduled_thread_uses_resumable_history(tmp_path: Path) -> None:
+    (tmp_path / "project").mkdir()
+    task = {**task_record(), "thread_id": None}
+    codex = CompletingCodex()
+    scheduler = TaskScheduler(FakeDatabase(task), codex, Workspace(tmp_path, 1024))
+    assert await scheduler.run_task(1)
+    assert codex.calls[0][0] == "thread/start"
+    assert codex.calls[0][1]["historyMode"] == "legacy"
+    assert codex.calls[1][1]["threadId"] == "new-thread"

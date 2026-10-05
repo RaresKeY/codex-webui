@@ -247,6 +247,24 @@ def test_unmaterialized_new_thread_resume_is_a_verified_noop(
     )
 
 
+@pytest.mark.parametrize("operation", ["read", "resume"])
+def test_unsupported_paginated_history_has_actionable_error_without_rewriting_it(
+    client: TestClient, monkeypatch, operation: str
+) -> None:
+    request = AsyncMock(side_effect=CodexRPCError({
+        "code": -32601, "message": "list_turns is not supported yet",
+    }))
+    monkeypatch.setattr(client.app.state.codex, "request", request)
+    if operation == "read":
+        response = client.get("/api/threads/paginated-1")
+    else:
+        response = client.post("/api/threads/paginated-1/resume", json={"model": "gpt-6-luna"})
+    assert response.status_code == 409
+    assert "Start a new chat" in response.json()["detail"]
+    assert "rpc_error" not in response.json()
+    assert request.await_count == 1
+
+
 def test_manual_duplicate_task_run_returns_conflict(client: TestClient, monkeypatch) -> None:
     created = client.post(
         "/api/tasks",
@@ -308,6 +326,7 @@ def test_ephemeral_thread_creation_uses_public_app_server_shape(
         "thread/start",
         {
             "cwd": str(client.app.state.settings.workspace_root),
+            "historyMode": "legacy",
             "approvalPolicy": "on-request",
             "sandbox": "read-only",
             "ephemeral": True,

@@ -2,7 +2,7 @@
 
 Scheduling is server-owned in `backend/app/scheduler.py` using APScheduler. A SQLite record stores name, prompt, `interval` or five-field cron expression, validated workspace-relative path, optional thread ID, enabled flag, and last run/status/error summary. The scheduler is UTC-only. Interval values are seconds with a 10-second minimum; cron uses `CronTrigger.from_crontab`.
 
-Jobs use `coalesce=True`, `max_instances=1`, and replace-by-task ID. An in-process task-ID lease prevents overlap between scheduled and manual runs. A run resumes with the configured working directory or starts a thread there using exact `on-request` approval and `workspace-write` sandbox modes, starts a turn, waits for the matching `turn/completed`, and persists terminal status/error. Stop cancels active scheduler tasks.
+Jobs use `coalesce=True`, `max_instances=1`, and replace-by-task ID. An in-process task-ID lease prevents overlap between scheduled and manual runs. A run resumes with the configured working directory or starts a legacy-history thread there using exact `on-request` approval and `workspace-write` sandbox modes, starts a turn, waits for the matching `turn/completed`, and persists terminal status/error. Stop cancels active scheduler tasks.
 
 ## Gaps
 

@@ -36,7 +36,7 @@ Prerequisites: rootless Podman, Python 3.12+ for tooling, and the installed Linu
 ./tools/build-image.sh
 ```
 
-Installation verifies every package against `frontend/package-lock.json` without executing lifecycle scripts. It runs in an ephemeral non-root container. Frontend build, lint and unit tests run in network-disabled containers with scoped Deno permissions. Backend tests run in the resulting runtime image without credentials or network.
+Installation verifies every package against `frontend/package-lock.json` without executing lifecycle scripts. It runs in an ephemeral non-root container. Frontend build, lint and unit tests run in network-disabled containers with scoped Deno permissions. Backend tests and a native App Server new-thread lifecycle check run in the resulting runtime image without credentials or network. New threads explicitly request legacy history because the installed runtime cannot resume its default paginated threads. Existing incompatible conversations show a New chat recovery message; their history is preserved.
 
 ```sh
 python3 tools/frontend.py check

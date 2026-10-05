@@ -43,6 +43,15 @@ from .updater import Updater
 from .workspace import UnsafePath, Workspace
 from .task_router import RoutingError, TaskRouter
 
+UNSUPPORTED_HISTORY_MESSAGE = (
+    "This conversation uses a history mode that the installed Codex cannot resume. "
+    "Start a new chat and send your message there. Existing history has not been changed."
+)
+
+
+def unsupported_history(exc: CodexRPCError) -> bool:
+    return rpc_error_message(exc).casefold() == "list_turns is not supported yet"
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
@@ -268,6 +277,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": True})
         except CodexRPCError as exc:
+            if unsupported_history(exc):
+                raise HTTPException(409, UNSUPPORTED_HISTORY_MESSAGE) from None
             if "not materialized yet" not in rpc_error_message(exc).casefold():
                 raise
             # A public App Server thread has no rollout until its first user
@@ -310,6 +321,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "cwd": str(workspace.resolve(body.cwd or ".", must_exist=True)),
             "approvalPolicy": body.approval_policy or settings.approval_policy,
             "sandbox": body.sandbox or settings.sandbox,
+            # The installed runtime selected paginated history but cannot resume it.
+            "historyMode": "legacy",
         }
         if body.model:
             params["model"] = body.model
@@ -347,6 +360,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             return await codex.request("thread/resume", params)
         except CodexRPCError as exc:
+            if unsupported_history(exc):
+                raise HTTPException(409, UNSUPPORTED_HISTORY_MESSAGE) from None
             if "no rollout found for thread id" not in rpc_error_message(exc).casefold():
                 raise
             # A just-created, loaded thread needs its first turn before it can

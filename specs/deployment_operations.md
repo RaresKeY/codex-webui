@@ -1,6 +1,6 @@
 # Deployment and operations
 
-`tools/build-image.sh` builds `localhost/codex-webui-2-tools:local`, verifies frontend build/lint/tests through the non-root tool container, builds `localhost/codex-webui-2:local`, and runs backend tests in the runtime image without network/auth mounts. `--fetch` explicitly allows dependency download, using exact integrity-checked lockfile tarballs and no lifecycle scripts. Routine frontend checks disable network and Deno remote-module resolution.
+`tools/build-image.sh` builds `localhost/codex-webui-2-tools:local`, verifies frontend build/lint/tests through the non-root tool container, builds `localhost/codex-webui-2:local`, and runs backend tests and a real App Server thread-lifecycle check in the runtime image without network/auth mounts. The lifecycle check creates only temporary state and makes no inference calls. `--fetch` explicitly allows dependency download, using exact integrity-checked lockfile tarballs and no lifecycle scripts. Routine frontend checks disable network and Deno remote-module resolution.
 
 `Containerfile.tools` pins Python 3.12 and Deno 2.9.7 image digests. The runtime pins the Python base and `backend/requirements.lock.txt`, copies only app source and the current validated `frontend/dist`, and obtains standalone Codex/codex-code-mode-host from an explicit build context pointing to the installed release's bin directory. No `.codex`, `.env`, data or auth directory enters the context. apt toolchain packages remain repository-resolved.
 
