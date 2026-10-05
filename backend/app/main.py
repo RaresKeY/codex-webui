@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import mimetypes
 import re
 import shutil
@@ -17,9 +18,11 @@ from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, We
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import StreamingResponse
 
+from .chat_service import MessageError, RoutedChat, UNSUPPORTED_HISTORY_MESSAGE, unsupported_history
 from .codex_client import CodexAppServerClient, CodexRPCError, CodexUnavailable
-from .config import Settings, load_settings, sandbox_policy
+from .config import Settings, load_settings
 from .database import Database
 from .models import (
     ApprovalResponse,
@@ -43,16 +46,6 @@ from .updater import Updater
 from .workspace import UnsafePath, Workspace
 from .task_router import RoutingError, TaskRouter
 
-UNSUPPORTED_HISTORY_MESSAGE = (
-    "This conversation uses a history mode that the installed Codex cannot resume. "
-    "Start a new chat and send your message there. Existing history has not been changed."
-)
-
-
-def unsupported_history(exc: CodexRPCError) -> bool:
-    return rpc_error_message(exc).casefold() == "list_turns is not supported yet"
-
-
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     db = Database(settings.database_path)
@@ -68,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     updater = Updater(settings.update_command, settings.workspace_root)
     router = TaskRouter(settings.jev_key_file)
+    chat = RoutedChat(codex, router, settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -89,6 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.scheduler = scheduler
     app.state.updater = updater
     app.state.router = router
+    app.state.chat = chat
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
@@ -128,6 +123,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from fastapi.responses import JSONResponse
 
         return JSONResponse(status_code=502, content={"detail": str(exc), "rpc_error": exc.error})
+
+    @app.exception_handler(MessageError)
+    async def message_error(_: Request, exc: MessageError):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -328,18 +328,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             params["model"] = body.model
         if body.ephemeral:
             params["ephemeral"] = True
-        result = await codex.request("thread/start", params)
-        if body.prompt:
-            thread = result.get("thread", result) if isinstance(result, dict) else {}
-            thread_id = thread.get("id") or thread.get("threadId")
-            if not thread_id:
-                raise HTTPException(502, "Codex did not return a thread id")
-            turn = await codex.request(
-                "turn/start",
-                {"threadId": thread_id, "input": [{"type": "text", "text": body.prompt}]},
-            )
-            return {"thread": result, "turn": turn}
-        return result
+        return await codex.request("thread/start", params)
 
     @app.post("/api/threads/{thread_id}/route")
     async def route_message(thread_id: str, body: RouteRequest) -> Any:
@@ -352,21 +341,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/threads/{thread_id}/resume")
     async def resume_thread(thread_id: str, body: ThreadResume) -> Any:
-        params: dict[str, Any] = {"threadId": thread_id}
+        overrides: dict[str, Any] = {}
         if body.cwd:
-            params["cwd"] = str(workspace.resolve(body.cwd, must_exist=True))
+            overrides["cwd"] = str(workspace.resolve(body.cwd, must_exist=True))
         if body.model:
-            params["model"] = body.model
+            overrides["model"] = body.model
         try:
-            return await codex.request("thread/resume", params)
+            async with chat.reserve(thread_id):
+                if overrides:
+                    await chat.bind(thread_id, overrides)
+                else:
+                    await chat.ensure_loaded(thread_id)
+                result = await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
+                return {**result, "modelChangeAcknowledged": bool(body.model)}
         except CodexRPCError as exc:
             if unsupported_history(exc):
                 raise HTTPException(409, UNSUPPORTED_HISTORY_MESSAGE) from None
-            if "no rollout found for thread id" not in rpc_error_message(exc).casefold():
-                raise
-            # A just-created, loaded thread needs its first turn before it can
-            # be resumed. Confirm it still exists, then treat resume as a no-op.
-            return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
+            raise
 
     @app.patch("/api/threads/{thread_id}/name")
     async def name_thread(thread_id: str, body: ThreadName) -> Any:
@@ -409,29 +400,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ) or {"project_id": None}
         return await db.set_chat_metadata(thread_id, existing["project_id"], False)
 
+    @app.post("/api/threads/{thread_id}/messages", status_code=201)
     @app.post("/api/threads/{thread_id}/turns", status_code=201)
-    async def start_turn(thread_id: str, body: TurnStart) -> Any:
-        params: dict[str, Any] = {
-            "threadId": thread_id,
-            "input": [{"type": "text", "text": body.input}],
-            "approvalPolicy": body.approval_policy or settings.approval_policy,
-        }
-        if body.sandbox:
-            params["sandboxPolicy"] = sandbox_policy(body.sandbox, settings.workspace_root)
-        if body.model:
-            params["model"] = body.model
-        if body.effort:
-            params["effort"] = body.effort
-        return await codex.request("turn/start", params)
+    async def send_message(thread_id: str, body: TurnStart, request: Request) -> Any:
+        # Both public execution URLs consume the same server-owned pipeline.
+        operation = chat.send(thread_id, body, request.is_disconnected)
+        if "application/x-ndjson" in request.headers.get("accept", ""):
+            async def stream():
+                try:
+                    async for frame in operation:
+                        yield json.dumps(frame, ensure_ascii=False) + "\n"
+                except MessageError as exc:
+                    yield json.dumps({"error": {"status": exc.status, "message": str(exc)}}) + "\n"
+                finally:
+                    await operation.aclose()
+            return StreamingResponse(stream(), status_code=201, media_type="application/x-ndjson", headers={"Cache-Control": "no-store"})
+        result = None
+        try:
+            async for frame in operation:
+                if "result" in frame:
+                    result = frame["result"]
+        finally:
+            await operation.aclose()
+        return result
 
     @app.post("/api/threads/{thread_id}/turns/{turn_id}/steer")
     async def steer_turn(thread_id: str, turn_id: str, body: TurnSteer) -> Any:
-        params: dict[str, Any] = {
-            "threadId": thread_id,
-            "expectedTurnId": body.expected_turn_id or turn_id,
-            "input": [{"type": "text", "text": body.input}],
-        }
-        return await codex.request("turn/steer", params)
+        raise HTTPException(409, "Wait for the current turn to finish, then send this ask through the routed messages endpoint.")
 
     @app.post("/api/threads/{thread_id}/turns/{turn_id}/interrupt")
     async def interrupt_turn(thread_id: str, turn_id: str) -> Any:

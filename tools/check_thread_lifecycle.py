@@ -35,7 +35,30 @@ def main():
             for model in ("gpt-6-luna", "gpt-6.1-sol"):
                 response = client.post(f"/api/threads/{thread_id}/resume", json={"model": model})
                 assert response.status_code == 200, response.status_code
-        print("Native offline lifecycle passed: legacy creation, empty history, both model-change requests.")
+                assert response.json()["modelChangeAcknowledged"] is True
+
+            # Keep native metadata/loading/settings RPCs real; replace only paid
+            # routing and inference transport with bounded synthetic fixtures.
+            codex = client.app.state.codex
+            original_request = codex.request
+            observed = []
+            async def request(method, params):
+                observed.append((method, params))
+                if method == "turn/start":
+                    return {"turn": {"id": "synthetic-turn"}}
+                return await original_request(method, params)
+            async def choose(task):
+                return {"model": "gpt-6-luna", "effort": "low", "reviewNeeded": False, "policy": "2026-10-05-v5"}
+            codex.request = request
+            client.app.state.router.choose = choose
+            ask = "  Synthetic request\n\n "
+            response = client.post(f"/api/threads/{thread_id}/messages", json={"input": ask})
+            assert response.status_code == 201, response.status_code
+            assert response.json()["modelChangeAcknowledged"] is True
+            assert observed[-2] == ("thread/settings/update", {"threadId": thread_id, "model": "gpt-6-luna", "effort": "low"})
+            assert observed[-1][0] == "turn/start"
+            assert observed[-1][1]["input"][0]["text"] == ask
+        print("Native offline lifecycle passed: legacy history, real model acknowledgements, synthetic routed submission with exact text.")
 
 
 if __name__ == "__main__":

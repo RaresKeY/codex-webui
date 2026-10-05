@@ -137,6 +137,7 @@ export interface BootstrapPayload {
 }
 
 export interface LiveUpdate {
+  selectedModel?: string
   event?: StreamEvent
   turn?: TurnSignal
   contextPercent?: number

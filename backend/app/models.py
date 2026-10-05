@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import normalize_approval_policy, normalize_sandbox
 
@@ -13,7 +13,7 @@ def utc_now() -> str:
 
 
 class ThreadStart(BaseModel):
-    prompt: str | None = None
+    model_config = ConfigDict(extra="forbid")
     cwd: str | None = None
     model: str | None = None
     approval_policy: str | None = None
@@ -45,11 +45,17 @@ class ThreadName(BaseModel):
 
 
 class TurnStart(BaseModel):
-    input: str = Field(min_length=1)
-    model: str | None = None
-    effort: str | None = None
+    model_config = ConfigDict(extra="forbid")
+    input: str = Field(min_length=1, max_length=24_000)
     approval_policy: str | None = None
     sandbox: str | None = None
+
+    @field_validator("input")
+    @classmethod
+    def preserve_nonblank_input(cls, value: str) -> str:
+        if not value.strip() or len(value.encode("utf-8")) > 24_000:
+            raise ValueError("input must be nonblank text under 24 KB")
+        return value
 
     @field_validator("approval_policy")
     @classmethod

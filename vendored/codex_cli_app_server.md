@@ -16,6 +16,7 @@ Primary references:
 - [Codex App Server README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
 - [Codex repository](https://github.com/openai/codex)
 - [Official Codex CLI install/update documentation](https://developers.openai.com/codex/cli)
+- [Official App Server contract](https://learn.chatgpt.com/docs/app-server)
 
 ## Used protocol subset
 
@@ -26,6 +27,8 @@ The generated ClientRequest union has no browser-tab, navigation, DOM, or screen
 Realtime is experimental but public in the generated schema. The browser follows the upstream WebRTC example: audio track plus `oai-events` data channel before `createOffer()`, `thread/realtime/start` with the browser SDP, `thread/realtime/sdp` for the answer, and `thread/realtime/stop` for teardown. The client requests version `v3`; the upstream implementation accepts WebRTC v1/v3 and rejects v2. The stable CLI lists `realtime_conversation` as under development and off by default. The local launcher uses its supported process-scoped `--enable realtime_conversation` flag, then verifies effective feature state, required account presence, and voices. Inherited source and no-session probe evidence indicated that WebRTC v3 uses the existing ChatGPT auth provider; only the legacy direct WebSocket path has the API-key-only helper.
 
 0.160.0 schema verification includes `ThreadStartParams.historyMode`. The current runtime selected paginated history when this field was omitted but rejected full reads and resume with `list_turns is not supported yet`. The WebUI explicitly requests legacy history for new threads; incompatible existing threads receive a recovery instruction without history mutation. `tools/check_thread_lifecycle.py` now verifies the actual packaged backend/binary offline with fresh temporary state.
+
+The installed schema also defines `thread/loaded/list` and `thread/settings/update` with model/effort inputs and an empty-object acknowledgement. The general App Server documentation confirms the turn model/effort fields but does not document this settings method; its contract comes from the installed generated schema and native offline checks. Fresh loaded threads accept settings updates for both routing models before their first turn. Chat submission awaits that response, then sends matching model/effort through `turn/start`; a failed provisional resume or a metadata read cannot stand in for acknowledgement. Direct HTTP `turn/steer` execution is no longer exposed.
 
 Required 0.147 sandbox-policy fields are preserved: read-only includes `networkAccess`; workspace-write includes `writableRoots`, `networkAccess`, `excludeTmpdirEnvVar`, and `excludeSlashTmp`.
 

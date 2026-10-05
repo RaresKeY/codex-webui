@@ -224,33 +224,27 @@ def test_unmaterialized_new_thread_reads_metadata_without_turns(
     )
 
 
-def test_unmaterialized_new_thread_resume_is_a_verified_noop(
-    client: TestClient, monkeypatch
-) -> None:
+def test_new_thread_model_change_is_actually_acknowledged(client: TestClient, monkeypatch) -> None:
     codex = client.app.state.codex
     request = AsyncMock(side_effect=[
-        CodexRPCError({"code": -32600, "message": "no rollout found for thread id new-1"}),
-        {"thread": {"id": "new-1", "turns": []}},
+        {"data": ["new-1"]}, {}, {"thread": {"id": "new-1", "turns": []}},
     ])
     monkeypatch.setattr(codex, "request", request)
     monkeypatch.setattr(type(codex), "available", PropertyMock(return_value=True))
-
-    response = client.post("/api/threads/new-1/resume", json={"model": "gpt-5.6-sol"})
-
+    response = client.post("/api/threads/new-1/resume", json={"model": "gpt-6-luna"})
     assert response.status_code == 200
-    assert response.json()["thread"]["id"] == "new-1"
-    assert request.await_args_list[0].args == (
-        "thread/resume", {"threadId": "new-1", "model": "gpt-5.6-sol"}
-    )
-    assert request.await_args_list[1].args == (
-        "thread/read", {"threadId": "new-1", "includeTurns": False}
-    )
+    assert response.json()["modelChangeAcknowledged"] is True
+    assert [call.args[0] for call in request.await_args_list] == [
+        "thread/loaded/list", "thread/settings/update", "thread/read",
+    ]
+    assert request.await_args_list[1].args[1] == {"threadId": "new-1", "model": "gpt-6-luna"}
 
 
 @pytest.mark.parametrize("operation", ["read", "resume"])
 def test_unsupported_paginated_history_has_actionable_error_without_rewriting_it(
     client: TestClient, monkeypatch, operation: str
 ) -> None:
+    monkeypatch.setattr(type(client.app.state.codex), "available", PropertyMock(return_value=True))
     request = AsyncMock(side_effect=CodexRPCError({
         "code": -32601, "message": "list_turns is not supported yet",
     }))

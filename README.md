@@ -4,14 +4,16 @@ A separate, local Codex chat app with a quieter ChatGPT-style interface. It reus
 
 One sidebar, readable conversations, user message bubbles, a compact composer, and optional workspace tools keep chat central. Command output and public thought summaries expand on demand. Desktop navigation collapses; phone navigation and context use exclusive drawers.
 
-Every text message follows this order:
+The browser submits each text message once to the backend. After checking that the conversation is available, the backend enforces this order:
 
 1. Send the original ask to Jev (`jev-1.13.0`) using the task router's V5 policy.
 2. Validate and select `gpt-6.1-sol` or `gpt-6-luna` and low/medium/high/xhigh/max effort.
-3. Send the selected model to Codex with `thread/resume` and await acknowledgement.
+3. Apply the selected model and effort with `thread/settings/update` and await its acknowledgement, loading the thread first if needed.
 4. Send the unchanged ask through `turn/start` with that model and effort.
 
 Jev failure, an invalid decision, or a rejected model change stops submission. There is no silent fallback or automatic retry. Failed drafts remain in the composer. Jev receives only the current ask; it receives no history, source files, account metadata, or credentials from Codex. Its confidence estimates are uncalibrated.
+
+`POST /api/threads/{id}/messages` owns this complete operation; `/turns` is a routed compatibility alias. Caller-selected model/effort fields, thread creation with `prompt`, and direct steering cannot bypass routing. Leading/trailing whitespace is preserved through the composer, Jev payload and Codex input.
 
 ## Container launch
 

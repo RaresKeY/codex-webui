@@ -9,6 +9,7 @@ Implemented loopback single-user baseline; no remote-access authorization.
 - HTTP/WebSocket policy: `backend/app/main.py`.
 - Workspace containment: `backend/app/workspace.py`.
 - Subprocess/log boundary: `backend/app/codex_client.py`.
+- Text-chat execution policy: `backend/app/chat_service.py`, request models and message routes.
 - Loopback lifecycle: `tools/run-container.sh`.
 - Browser media ownership: `frontend/src/realtime.ts`.
 
@@ -22,9 +23,11 @@ Workspace file access stays below the configured canonical root and rejects trav
 
 Anyone who reaches the loopback UI has the effective Codex authority of the signed-in container user. These controls prevent common cross-site drive-by use but are not authentication.
 
+Interactive text execution is server-owned: both message URLs require a fresh Jev decision and actual model/effort settings acknowledgement before the exact ask reaches Codex. Caller model/effort overrides and thread-start prompts are rejected, and direct steering is disabled. Classification previews and public model changes grant no execution shortcut. Per-thread leases reject concurrent sends/model changes within this companion process. This contract applies to submitted text chat; scheduling and experimental realtime retain separate documented paths.
+
 ## Verification
 
-API tests cover trusted Host, Origin/fetch-site, WebSocket Origin, security headers, traversal, exact thread scoping, active-writer isolation, and bounded Git status parsing in a real temporary repository. The live smoke compares the selected Codex `config.toml` digest before/after and denies its command before execution.
+API tests cover trusted Host, Origin/fetch-site, WebSocket Origin, security headers, traversal, exact thread scoping, active-writer isolation, bounded Git status parsing in a real temporary repository, and direct-client routing bypasses. Routed-chat errors return bounded messages rather than provider/RPC diagnostics. The live smoke compares the selected Codex `config.toml` digest before/after and denies its command before execution.
 
 ## Gaps
 

@@ -174,7 +174,7 @@ function Composer({ onSend, busy, voiceEnabled, voiceState, voiceMessage, onVoic
     if (!value.trim() || busy || sending.current) return
     sending.current = true
     const submitted = value
-    try { if (await onSend(value.trim())) setValue(current => current === submitted ? '' : current) }
+    try { if (await onSend(submitted)) setValue(current => current === submitted ? '' : current) }
     finally { sending.current = false }
   }
   const voiceActive = voiceState === 'live' || voiceState === 'connecting'
@@ -286,7 +286,9 @@ function ChatSurface({ conversation, project, projects, events, turn, connection
         if (!mounted.current) return
         setRoutingStage(stage)
         if (chosen) { setDecision(chosen); setSelectedModel(chosen.model); setActiveResponseModel(chosen.model); onTurnModel(chosen.model) }
-        if (stage === 'sending') { onTurnAction({ type: 'submitted', requestId }); onConversationStatus('running') }
+        // Register before the single HTTP request so late progress cannot reset
+        // a turn that already completed on the event socket.
+        if (stage === 'routing') { onTurnAction({ type: 'submitted', requestId }); onConversationStatus('running') }
       }, controller.signal)
       if (!mounted.current) return true
       onTurnAction({ type: 'acknowledged', requestId, turnId: result.turnId })
@@ -653,6 +655,10 @@ export default function App() {
       conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, status } : conversation),
     } : current)
     const applyUpdate = (update: LiveUpdate) => {
+      if (update.selectedModel) {
+        activeModelRef.current = update.selectedModel
+        setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeId ? { ...chat, model: update.selectedModel! } : chat) } : current)
+      }
       if (update.event) setEvents(current => stampAssistantMessageModel(mergeStreamEvent(current, update.event!), activeModelRef.current))
       if (update.contextPercent !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, contextPercent: update.contextPercent! } : conversation) } : current)
       if (update.conversationTitle !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, title: update.conversationTitle! } : conversation) } : current)

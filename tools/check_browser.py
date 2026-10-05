@@ -41,6 +41,9 @@ class Fixtures(SimpleHTTPRequestHandler):
     def reply(self, data, status=200):
         body = json.dumps(data).encode()
         self.send_response(status); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+    def stream_reply(self, frames):
+        body = (''.join(json.dumps(frame) + '\n' for frame in frames)).encode()
+        self.send_response(201); self.send_header('Content-Type', 'application/x-ndjson'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
     @classmethod
     def emit(cls, value):
         data = json.dumps(value).encode()
@@ -73,7 +76,18 @@ class Fixtures(SimpleHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or '{}')
         self.calls.append((self.path, body))
-        if self.path.endswith('/route'):
+        if self.path.endswith('/messages'):
+            time.sleep(.15)
+            if self.fail_route:
+                self.stream_reply([{'stage': 'routing'}, {'error': {'status': 409, 'message': 'Jev routing failed. Your message was not sent to Codex.'}}])
+            else:
+                self.stream_reply([{'stage': 'routing'}, {'stage': 'switching', 'decision': DECISION}, {'stage': 'sending', 'decision': DECISION}, {'result': {'turn': {'id': 'fixture-turn'}, 'decision': DECISION, 'modelChangeAcknowledged': True}}])
+                def finish():
+                    self.emit({'method': 'webui/modelSelected', 'params': {'threadId': 'c1', 'model': DECISION['model']}})
+                    self.emit({'method': 'item/agentMessage/delta', 'params': {'threadId': 'c1', 'turnId': 'fixture-turn', 'itemId': 'a1', 'delta': 'The selected model received your original message.'}})
+                    self.emit({'method': 'turn/completed', 'params': {'threadId': 'c1', 'turn': {'id': 'fixture-turn', 'status': 'completed'}}})
+                threading.Timer(.2, finish).start()
+        elif self.path.endswith('/route'):
             time.sleep(.15)
             self.reply({'detail': 'Jev routing failed. Your message was not sent to Codex.'}, 409) if self.fail_route else self.reply(DECISION)
         elif self.path.endswith('/turns'):
@@ -139,21 +153,21 @@ def main():
                 click('[aria-label="Open context panel"]'); wait("document.querySelector('.context-panel') !== null")
                 screenshot('desktop-context.png')
                 click('[aria-label="Close context panel"]')
-                fill('Synthetic ordering check')
+                exact_ask = '  Synthetic ordering check\n\n '
+                fill(exact_ask)
                 click('[aria-label="Send message"]')
                 wait("document.querySelector('textarea').value === '' && !document.querySelector('.send-button .spin')")
-                calls = [call for call in Fixtures.calls if call[0].endswith(('/route', '/resume', '/turns'))]
-                assert [call[0].rsplit('/', 1)[-1] for call in calls] == ['route', 'resume', 'turns']
-                assert calls[0][1]['input'] == calls[2][1]['input'] == 'Synthetic ordering check'
-                assert calls[1][1] == {'model': DECISION['model']}
-                assert calls[2][1]['effort'] == 'low'
+                calls = [call for call in Fixtures.calls if call[0].endswith(('/messages', '/route', '/resume', '/turns'))]
+                assert len(calls) == 1 and calls[0][0].endswith('/messages')
+                assert calls[0][1] == {'input': exact_ask}
                 Fixtures.fail_route = True
                 before = len(Fixtures.calls)
-                fill('Preserve this failed draft')
+                exact_failed_draft = '  Preserve this failed draft\n '
+                fill(exact_failed_draft)
                 click('[aria-label="Send message"]')
                 wait("document.querySelector('[role=alert]') !== null || document.querySelector('.event-card.failed') !== null")
                 wait("!document.querySelector('[aria-label=\"Send message\"]').disabled")
-                assert evaluate("document.querySelector('textarea').value") == 'Preserve this failed draft'
+                assert evaluate("document.querySelector('textarea').value") == exact_failed_draft
                 assert len(Fixtures.calls) == before + 1
                 viewport(390, 844)
                 wait("document.querySelector('.chat-sidebar') === null")
@@ -169,8 +183,8 @@ def main():
                 assert evaluate("document.querySelector('[aria-label=\"Expand conversations\"]') !== null")
                 errors = [event for event in bidi.events if event.get('method') == 'log.entryAdded' and event.get('params', {}).get('level') == 'error' and event.get('params', {}).get('type') == 'javascript']
                 assert not errors, errors
-                (output / 'checks.json').write_text(json.dumps({'syntheticFixtures': True, 'desktop': measurements, 'phone': {'width': 390, 'height': 844}, 'checks': ['geometry', 'collapsed activity', 'context panel', 'ordered send', 'failed draft retained', 'phone no overflow', 'exclusive navigation', 'new chat', 'secondary page access'], 'uncaughtErrors': len(errors)}, indent=2) + '\n')
-                print('Browser checks passed: desktop 1440×1000, phone 390×844, ordered send and fail-closed draft retention.')
+                (output / 'checks.json').write_text(json.dumps({'syntheticFixtures': True, 'desktop': measurements, 'phone': {'width': 390, 'height': 844}, 'checks': ['geometry', 'collapsed activity', 'context panel', 'single backend send', 'exact padded input', 'failed draft retained', 'phone no overflow', 'exclusive navigation', 'new chat', 'secondary page access'], 'uncaughtErrors': len(errors)}, indent=2) + '\n')
+                print('Browser checks passed: desktop 1440×1000, phone 390×844, one backend send and exact whitespace preservation.')
             finally:
                 server.stopping = True; server.shutdown()
                 if bidi:

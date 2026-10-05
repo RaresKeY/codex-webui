@@ -27,7 +27,7 @@ export function turnStartFailureMessage(error: unknown): string {
   return 'The local service could not start this Codex turn. Your prompt is preserved above; reconnect and retry.'
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchResponse(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -38,6 +38,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const detail = text(object(payload).detail, `${response.status} ${response.statusText}`)
     throw new ApiError(response.status, detail, payload)
   }
+  return response
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchResponse(path, init)
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
@@ -331,6 +336,7 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   const threadId = text(params.threadId)
   const turn = object(params.turn)
   const turnId = text(params.turnId ?? turn.id) || undefined
+  if (method === 'webui/modelSelected') return { selectedModel: text(params.model) }
   if (method === 'thread/name/updated') return { conversationTitle: text(params.threadName).trim() || UNTITLED_CONVERSATION }
   if (method === 'turn/started' && turnId) return { turn: { kind: 'started', turnId } }
   if (method === 'turn/completed' && turnId) {
@@ -443,19 +449,67 @@ export interface RoutingDecision {
 export type RoutingStage = 'routing' | 'switching' | 'sending'
 
 export async function sendPrompt(conversationId: string, prompt: string, onProgress?: (stage: RoutingStage, decision?: RoutingDecision) => void, signal?: AbortSignal): Promise<{ turnId?: string; decision: RoutingDecision }> {
+  signal?.throwIfAborted()
   onProgress?.('routing')
-  const decision = await request<RoutingDecision>(`/threads/${encodeURIComponent(conversationId)}/route`, { method: 'POST', body: JSON.stringify({ input: prompt }), signal })
+  const response = await fetchResponse(`/threads/${encodeURIComponent(conversationId)}/messages`, {
+    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: JSON.stringify({ input: prompt }), signal,
+  })
+  let stage: RoutingStage = 'routing'
+  let final: { turnId?: string; decision: RoutingDecision } | undefined
+  const readDecision = (raw: unknown): RoutingDecision => {
+    const decision = object(raw) as unknown as RoutingDecision
+    if (!['gpt-6.1-sol', 'gpt-6-luna'].includes(decision.model) || !['low', 'medium', 'high', 'xhigh', 'max'].includes(decision.effort)) throw new Error('The backend returned an unsupported routing decision.')
+    if (decision.reviewNeeded) throw new ApiError(409, 'Review the routing policy before sending this message.')
+    return decision
+  }
+  const consume = (raw: unknown) => {
+    signal?.throwIfAborted()
+    const frame = object(raw)
+    if (frame.error) {
+      const error = object(frame.error)
+      throw new ApiError(number(error.status, 502), text(error.message, 'Submission failed. Check the conversation before retrying.'))
+    }
+    if (frame.stage && ['routing', 'switching', 'sending'].includes(String(frame.stage)) && frame.stage !== stage) {
+      stage = frame.stage as RoutingStage
+      const decision = frame.decision ? readDecision(frame.decision) : undefined
+      onProgress?.(stage, decision)
+    }
+    if (frame.result) {
+      const result = object(frame.result)
+      const decision = readDecision(result.decision)
+      if (result.modelChangeAcknowledged !== true || !text(object(result.turn).id)) throw new Error('Codex could not confirm submission. Check the conversation before retrying.')
+      final = { turnId: text(object(result.turn).id), decision }
+    }
+  }
+  if (response.headers.get('Content-Type')?.includes('application/x-ndjson')) {
+    if (!response.body) throw new Error('The backend did not return a submission stream.')
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffered = ''
+    try {
+      while (true) {
+        const chunk = await reader.read()
+        buffered += decoder.decode(chunk.value, { stream: !chunk.done })
+        let newline: number
+        while ((newline = buffered.indexOf('\n')) >= 0) {
+          const line = buffered.slice(0, newline)
+          buffered = buffered.slice(newline + 1)
+          if (line.trim()) consume(JSON.parse(line))
+        }
+        if (chunk.done) break
+      }
+      if (buffered.trim()) consume(JSON.parse(buffered))
+    } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+  } else {
+    const result: unknown = await response.json()
+    const decision = readDecision(object(result).decision)
+    onProgress?.('switching', decision)
+    onProgress?.('sending', decision)
+    consume({ result })
+  }
   signal?.throwIfAborted()
-  const { model, effort } = decision
-  if (!['gpt-6.1-sol', 'gpt-6-luna'].includes(model) || !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort)) throw new Error('Jev returned an unsupported routing decision.')
-  if (decision.reviewNeeded) throw new ApiError(409, 'Jev selected Luna with unusually high reasoning. Review the routing policy before sending this message.')
-  onProgress?.('switching', decision)
-  await request(`/threads/${encodeURIComponent(conversationId)}/resume`, { method: 'POST', body: JSON.stringify({ model }) })
-  signal?.throwIfAborted()
-  onProgress?.('sending', decision)
-  const result = object(await request<unknown>(`/threads/${encodeURIComponent(conversationId)}/turns`, { method: 'POST', body: JSON.stringify({ input: prompt, model, effort }) }))
-  const turn = object(result.turn ?? result)
-  return { turnId: text(turn.id) || undefined, decision }
+  if (!final) throw new Error('Codex could not confirm submission. Check the conversation before retrying.')
+  return final
 }
 
 export async function loadRealtimeCapability(conversationId: string): Promise<RealtimeCapability> {
