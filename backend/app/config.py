@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     codex_enabled: bool = True
     codex_request_timeout_seconds: float = Field(default=30, gt=0, le=120)
     jev_key_file: Path | None = None
+    # Original host path, when the runtime mounts the same key at /run/secrets.
+    jev_key_source_file: Path | None = None
+    codex_state_source_dir: Path | None = None
     approval_policy: str = Field(
         default="on-request",
         validation_alias=AliasChoices("CODEX_WEBUI_APPROVAL_POLICY", "DEFAULT_APPROVAL_POLICY"),
@@ -118,6 +121,8 @@ class Settings(BaseSettings):
 
     @field_validator(
         "data_dir", "database_file", "image_directory", "frontend_dist", "workspace_root",
+        "jev_key_file", "jev_key_source_file",
+        "codex_state_source_dir",
         mode="before",
     )
     @classmethod

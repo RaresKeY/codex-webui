@@ -13,7 +13,7 @@ Implemented bounded tree/read/write plus read-only Git status.
 
 ## Behavior
 
-Every operation targets the single configured absolute workspace root plus a normalized relative path. Container bootstrap mounts that root at the identical absolute path. API paths reject escape outside the canonical root after symlink resolution.
+Every operation targets the single configured absolute workspace root plus a normalized relative path. Container bootstrap mounts that root at the identical absolute path. API paths reject escape outside the canonical root after symlink resolution. Configured Jev credential files and Codex state directories are also denied, including original host mount paths and symlink aliases. Tree and Git changes omit those entries; ordinary project files remain editable.
 
 `backend/app/workspace.py` exposes this single configured root. Tree depth is capped at 5 and each directory at 1,000 children; symlink entries are shown but never traversed. Text read/write defaults to a 2 MiB UTF-8 limit, rejects NUL-detected binary content, and uses `O_NOFOLLOW` for the final write component where available. The React panel provides typed icons, a depth-one bootstrap tree with lazy folder loading, explicit preview failures, and plain-text editing.
 

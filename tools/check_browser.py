@@ -17,6 +17,7 @@ import threading
 import time
 import zlib
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 def fixture_png():
@@ -27,9 +28,16 @@ def fixture_png():
 PNG = fixture_png()
 PNG_DATA = base64.b64encode(PNG).decode()
 PLUGIN = {'id': 'notes@local', 'name': 'notes', 'displayName': 'Local Notes', 'description': 'Find workspace notes'}
+MENTIONS = [
+    {'id': 'skill:review', 'kind': 'skill', 'name': 'review', 'displayName': 'Code review', 'description': 'Review changes', 'insertText': '$review'},
+    {**PLUGIN, 'id': 'plugin:notes@local', 'kind': 'plugin', 'insertText': '@notes'},
+    {'id': 'app:drive', 'kind': 'app', 'name': 'drive', 'displayName': 'Drive', 'description': 'Find documents', 'insertText': '$drive'},
+]
+MENTIONS.extend({'id': f'skill:task-{index}', 'kind': 'skill', 'name': f'task-{index}', 'displayName': f'Task {index}', 'description': 'A separate useful skill', 'insertText': f'$task-{index}'} for index in range(15))
+FILE_MENTION = {'id': 'file:src%2Fmain.py', 'kind': 'file', 'name': 'src/main.py', 'displayName': 'main.py', 'description': 'src/main.py', 'insertText': '@src/main.py'}
 DECISION = {'model': 'gpt-6.1-sol', 'effort': 'low', 'modelConfidence': .8, 'effortConfidence': .7,
             'contextMissing': None, 'reviewNeeded': False, 'policy': '2026-10-05-v5'}
-THREAD = {'id': 'c1', 'name': 'A calmer place to build', 'cwd': '/workspace/codex-webui-2', 'model': 'gpt-6.1-sol', 'status': 'idle', 'turns': [{'id': 't0', 'status': 'completed', 'items': [
+THREAD = {'id': 'c1', 'name': 'A calmer place to build', 'cwd': '/workspace/codex-webui-2', 'model': 'gpt-6.1-sol', 'status': 'idle', 'turns': [{'id': 't0', 'webui': {'model': 'gpt-6-luna', 'effort': 'medium'}, 'status': 'completed', 'items': [
     {'id': 'u0', 'type': 'userMessage', 'content': [{'type': 'text', 'text': 'Make this workspace simpler, with room to focus on the conversation.'}, {'type': 'localImage', 'path': '/workspace/codex-webui-2/preview.png'}]},
     {'id': 'r0', 'type': 'reasoning', 'summary': ['Keep useful workspace tools within reach.']},
     {'id': 'x0', 'type': 'commandExecution', 'command': 'python -m pytest', 'aggregatedOutput': 'All checks passed.', 'status': 'completed'},
@@ -52,13 +60,17 @@ class Fixtures(SimpleHTTPRequestHandler):
     baseline = False
     bundle = ROOT / 'frontend/dist'
     sockets = []
+    search_queries = []
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(self.bundle), **kwargs)
     def log_message(self, *_):
         pass
     def reply(self, data, status=200):
         body = json.dumps(data).encode()
-        self.send_response(status); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+        try:
+            self.send_response(status); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Aborting obsolete fixture reads is expected.
     def stream_reply(self, frames):
         body = (''.join(json.dumps(frame) + '\n' for frame in frames)).encode()
         self.send_response(201); self.send_header('Content-Type', 'application/x-ndjson'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
@@ -71,7 +83,7 @@ class Fixtures(SimpleHTTPRequestHandler):
             except OSError: cls.sockets.remove(connection)
     def do_GET(self):
         path = self.path.split('?')[0]
-        if path.startswith('/ws/'):
+        if path.startswith('/ws/') or path == '/api/activity':
             key = self.headers.get('Sec-WebSocket-Key', '')
             accept = base64.b64encode(hashlib.sha1((key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest()).decode()
             self.send_response(101); self.send_header('Upgrade', 'websocket'); self.send_header('Connection', 'Upgrade'); self.send_header('Sec-WebSocket-Accept', accept); self.end_headers()
@@ -88,16 +100,28 @@ class Fixtures(SimpleHTTPRequestHandler):
             if self.baseline: time.sleep(self.history_delay)
             self.reply({'health': {'codex_available': True}, 'projects': [{'id': 1, 'name': 'WebUI 2', 'workspace': '/workspace/codex-webui-2'}], 'threads': {'data': [THREAD] if self.baseline else []}, 'models': {'data': []}, 'system': {'runtime': 'container'}, 'tasks': [], 'workspace': [], 'features': {}})
         elif path == '/api/threads':
+            query = parse_qs(urlsplit(self.path).query).get('q', [''])[0]
+            if query:
+                self.search_queries.append(query)
+                if query == 'alpha': time.sleep(1)
+                return self.reply({'data': [{**THREAD, 'id': f'search-{query}', 'name': f'{query} remote result'}]})
             time.sleep(self.history_delay)
             self.reply({'detail': 'Synthetic history failure'}, 504) if self.fail_history else self.reply({'data': [THREAD]})
         elif path == '/api/plugins': self.reply({'data': [PLUGIN]})
+        elif path == '/api/mentions': self.reply({'data': MENTIONS, 'errors': []})
+        elif path == '/api/mention-files': self.reply({'data': [FILE_MENTION] if 'main' in parse_qs(urlsplit(self.path).query).get('q', [''])[0] else []})
         elif path == '/api/models': self.reply({'data': [{'id': DECISION['model']}, {'id': 'gpt-6-luna'}]})
         elif path == '/api/usage': self.reply({})
         elif path == '/api/workspace/image':
+            image_path = parse_qs(urlsplit(self.path).query).get('path', [''])[0]
+            if 'relative-review.png' in image_path and image_path != '/workspace/codex-webui-2/./relative-review.png':
+                return self.reply({'detail': 'Image resolved outside the fixture project'}, 404)
             self.send_response(200); self.send_header('Content-Type', 'image/png'); self.send_header('Content-Length', str(len(PNG))); self.end_headers(); self.wfile.write(PNG)
         elif path == '/api/approvals': self.reply({'data': []})
         elif path.endswith('/realtime/capability'): self.reply({'available': False, 'reason': 'Synthetic browser fixture'})
         elif path == '/api/threads/c1': self.reply({'thread': THREAD})
+        elif path.endswith('/permissions'): self.reply({'mode': 'default'})
+        elif path.endswith('/execution'): self.reply({'model': 'auto', 'effort': 'medium'})
         elif path.startswith('/api/threads/'): self.reply({'thread': {'id': path.rsplit('/', 1)[-1], 'turns': []}})
         elif path.startswith('/api/'): self.reply({'data': []})
         else: super().do_GET()
@@ -114,8 +138,10 @@ class Fixtures(SimpleHTTPRequestHandler):
             else:
                 self.stream_reply([{'stage': 'routing'}, {'stage': 'switching', 'decision': DECISION}, {'stage': 'sending', 'decision': DECISION}, {'result': {'turn': {'id': turn_id}, 'decision': DECISION, 'modelChangeAcknowledged': True}}])
                 def finish():
-                    self.emit({'method': 'webui/modelSelected', 'params': {'threadId': 'c1', 'model': DECISION['model']}})
-                    self.emit({'method': 'item/agentMessage/delta', 'params': {'threadId': 'c1', 'turnId': turn_id, 'itemId': item_id, 'delta': 'The selected model received your original message.'}})
+                    self.emit({'method': 'webui/modelSelected', 'params': {'threadId': 'c1', 'model': DECISION['model'], 'effort': DECISION['effort']}})
+                    answer = 'The selected model received your original message.'
+                    if body.get('input') == 'Navigation draft': answer += '\n\n![Project preview](./relative-review.png)'
+                    self.emit({'method': 'item/agentMessage/delta', 'params': {'threadId': 'c1', 'turnId': turn_id, 'itemId': item_id, 'delta': answer}})
                     if not self.baseline: self.emit({'method': 'item/completed', 'params': {'threadId': 'c1', 'turnId': turn_id, 'item': {'id': f'image-{turn_id}', 'type': 'imageGeneration', 'status': 'completed', 'result': PNG_DATA}}})
                     self.emit({'method': 'thread/tokenUsage/updated', 'params': {'threadId': 'c1', 'tokenUsage': {'total': {'totalTokens': 999999}, 'last': {'totalTokens': 12500}, 'modelContextWindow': 100000}}})
                     threading.Timer(.4, lambda: self.emit({'method': 'turn/completed', 'params': {'threadId': 'c1', 'turn': {'id': turn_id, 'status': 'completed'}}})).start()
@@ -130,7 +156,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bidi-helper', type=Path, default=Path.home() / 'workspace/godot-performance-lab/tools/firefox_bidi_profile.py')
     parser.add_argument('--baseline-bundle', type=Path, help='Capture the previous runtime bundle against matched synthetic states')
+    parser.add_argument('--bundle', type=Path, help='Production bundle to verify without rebuilding it')
+    parser.add_argument('--output-dir', type=Path, default=ROOT / 'evidence/ui')
     args = parser.parse_args()
+    if args.bundle:
+        Fixtures.bundle = args.bundle.resolve()
     if args.baseline_bundle:
         Fixtures.baseline = True
         Fixtures.bundle = args.baseline_bundle.resolve()
@@ -139,7 +169,7 @@ def main():
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     server = ThreadingHTTPServer(('127.0.0.1', 0), Fixtures)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    output = ROOT / 'evidence/ui'; output.mkdir(parents=True, exist_ok=True)
+    output = args.output_dir.resolve(); output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='webui2-firefox-') as profile, socket.socket() as probe:
         probe.bind(('127.0.0.1', 0)); port = probe.getsockname()[1]
         probe.close()
@@ -176,6 +206,7 @@ def main():
                 if Fixtures.baseline:
                     wait("document.querySelector('.loading-screen') !== null")
                     screenshot('before-desktop-shell.png')
+                    wait("document.querySelector('.launch-recents button') !== null"); click('.launch-recents button')
                     wait("document.querySelector('.message.assistant') !== null")
                     screenshot('before-desktop.png')
                     assert evaluate("document.querySelectorAll('.inline-image').length") == 0
@@ -193,8 +224,12 @@ def main():
                 wait("document.querySelector('.app-shell') !== null")
                 assert evaluate("document.querySelector('.loading-screen') === null && document.querySelector('.history-notice')?.textContent.includes('Loading')")
                 screenshot('desktop-shell.png')
+                wait("document.querySelector('.chat-row') !== null")
+                click('.chat-row')
                 wait("document.querySelector('.message.assistant') !== null && document.querySelector('.chat-progress') === null")
                 wait("Array.from(document.querySelectorAll('.inline-image img')).every(image => image.complete && image.naturalWidth > 0)")
+                screenshot('desktop-restored-effort.png')
+                assert evaluate("document.querySelector('.chat-model-select')?.textContent.includes('6-luna') && document.querySelector('.chat-model-effort')?.textContent.includes('medium')"), 'Reopened Auto chat must show its recorded model and effort'
                 assert evaluate("document.querySelectorAll('.inline-image').length === 2")
                 click('.inline-image'); wait("document.querySelector('.image-viewer')?.open === true")
                 screenshot('desktop-image.png')
@@ -210,7 +245,7 @@ def main():
                 measurements = evaluate("(() => { const c=document.querySelector('.composer').getBoundingClientRect(); const m=document.querySelector('.content-area').getBoundingClientRect(); return {sidebar:document.querySelector('.chat-sidebar').getBoundingClientRect().width,mainX:m.x,composerWidth:c.width,composerBottom:c.bottom,overflow:document.documentElement.scrollWidth>innerWidth,font:getComputedStyle(document.querySelector('.message.assistant .markdown-content')).fontSize,commandsOpen:document.querySelector('.command-group').open,thoughtOpen:document.querySelector('.reasoning-disclosure').open}; })()")
                 screenshot('desktop.png')
                 print(json.dumps(measurements))
-                assert measurements['sidebar'] == 260 and measurements['mainX'] == 260
+                assert measurements['sidebar'] == 280 and measurements['mainX'] == 280
                 assert measurements['font'] == '16px' and not measurements['overflow']
                 assert not measurements['commandsOpen'] and not measurements['thoughtOpen']
                 screenshot('desktop.png')
@@ -228,19 +263,57 @@ def main():
                 wait("document.querySelectorAll('.inline-image').length === 3 && Array.from(document.querySelectorAll('.inline-image img')).every(image => image.complete && image.naturalWidth > 0)")
                 screenshot('desktop-streaming.png')
                 wait("document.querySelector('.chat-progress') === null")
-                assert '12,500 / 100,000 tokens' in evaluate("document.querySelector('.context-button').title")
-                assert evaluate("document.querySelector('.context-ring').textContent") == '13%'
+                assert '12,500 / 100,000 tokens' in evaluate("document.querySelector('.composer .context-button').getAttribute('aria-label')")
+                assert not evaluate("Boolean(document.querySelector('.chat-header .context-button'))")
+                evaluate("(() => { document.querySelector('.composer .context-button').focus(); return true })()")
+                wait("document.querySelector('.context-tooltip')?.textContent.includes('13% used (87% left)')")
+                screenshot('desktop-context-tooltip.png')
+                key('\ue00c')
+                wait("!document.querySelector('.context-tooltip')")
 
                 calls = [call for call in Fixtures.calls if call[0].endswith(('/messages', '/route', '/resume', '/turns'))]
                 assert len(calls) == 1 and calls[0][0].endswith('/messages')
                 assert calls[0][1] == {'input': exact_ask}
-                fill('@'); wait("document.querySelector('.plugin-suggestions [role=option]') !== null")
+                fill('@notes'); wait("document.querySelector('.plugin-suggestions [role=option]')?.textContent.includes('Local Notes') === true")
+                # Simulate a busy frame without delaying real keyboard input.
+                # A deferred insertion-caret callback must not rewind typing.
+                evaluate("(() => { window.mentionFrames=[]; window.originalMentionFrame=window.requestAnimationFrame; window.requestAnimationFrame=callback => { window.mentionFrames.push(callback); return 0; }; return true; })()")
                 key('\ue007'); wait("document.querySelector('textarea').value === '@notes '")
-                key('h'); key('i')
+                key('h'); wait("document.querySelector('textarea').value === '@notes h'")
+                evaluate("(() => { window.requestAnimationFrame=window.originalMentionFrame; window.mentionFrames.forEach(callback => callback(performance.now())); delete window.mentionFrames; delete window.originalMentionFrame; return true; })()")
+                key('i'); wait("document.querySelector('textarea').value === '@notes hi'")
                 click('[aria-label="Send message"]')
                 wait("document.querySelector('textarea').value === '' && document.querySelector('.chat-progress') !== null")
-                assert Fixtures.calls[-1][1] == {'input': '@notes hi', 'plugins': ['notes@local']}
+                assert Fixtures.calls[-1][1] == {'input': '@notes hi', 'mentions': ['plugin:notes@local']}, Fixtures.calls[-1]
                 wait("document.querySelector('.chat-progress') === null")
+                fill('@notes'); wait("document.querySelector('.plugin-suggestions [role=option]')?.textContent.includes('Local Notes') === true")
+                key('\ue007'); wait("document.querySelector('textarea').value === '@notes '")
+                fill('Mention removed'); fill('@notes manually restored')
+                click('[aria-label="Send message"]')
+                wait("document.querySelector('textarea').value === '' && document.querySelector('.chat-progress') !== null")
+                assert Fixtures.calls[-1][1] == {'input': '@notes manually restored'}
+                wait("document.querySelector('.chat-progress') === null")
+                # @ lists all invocable categories and selects native skill/app syntax.
+                fill('@'); wait("document.querySelectorAll('.plugin-suggestions [role=option]').length === 12")
+                assert evaluate("Array.from(document.querySelectorAll('.plugin-suggestions small')).map(item => item.textContent).join(' ')").find('skill') >= 0
+                screenshot('desktop-all-mentions.png')
+                for _ in range(11): key('\ue015')
+                wait("document.querySelector('.plugin-options [aria-selected=true]')?.id === 'plugin-option-11'")
+                assert evaluate("(() => { const menu=document.querySelector('.plugin-suggestions').getBoundingClientRect(); const active=document.querySelector('.plugin-options [aria-selected=true]').getBoundingClientRect(); return active.top >= menu.top && active.bottom <= menu.bottom; })()")
+                screenshot('desktop-mentions-keyboard.png')
+                fill('@review'); wait("document.querySelector('.plugin-suggestions [role=option]')?.textContent.includes('Code review') === true")
+                key('\ue007'); wait("document.querySelector('textarea').value === '$review '")
+                fill('$review @drive'); wait("document.querySelector('.plugin-suggestions [role=option]')?.textContent.includes('Drive') === true")
+                key('\ue007'); wait("document.querySelector('textarea').value === '$review $drive '")
+                fill('$review $drive @src/main'); wait("document.querySelector('.plugin-suggestions [role=option]')?.textContent.includes('main.py') === true")
+                key('\ue007'); wait("document.querySelector('textarea').value === '$review $drive @src/main.py '")
+                click('[aria-label="Send message"]')
+                wait("document.querySelector('textarea').value === '' && document.querySelector('.chat-progress') !== null")
+                assert Fixtures.calls[-1][1] == {'input': '$review $drive @src/main.py ', 'mentions': ['skill:review', 'app:drive', FILE_MENTION['id']]}
+                wait("document.querySelector('.chat-progress') === null")
+                assert evaluate("Array.from(document.querySelectorAll('.message.assistant .message-model')).some(item => item.textContent.includes('gpt-6-luna') && item.textContent.includes('medium'))")
+                assert evaluate("Array.from(document.querySelectorAll('.message.assistant .message-model')).some(item => item.textContent.includes('gpt-6.1-sol') && item.textContent.includes('low'))")
+                assert evaluate("document.querySelector('.chat-model-select')?.textContent.includes('6.1-sol') && document.querySelector('.chat-model-effort')?.textContent.includes('low')")
                 # Typing the next draft while awaiting acknowledgement must survive.
                 Fixtures.send_delay = .6
                 fill('first draft'); click('[aria-label="Send message"]')
@@ -248,6 +321,37 @@ def main():
                 wait("document.querySelector('.chat-progress') === null")
                 assert evaluate("document.querySelector('textarea').value") == 'next draft'
                 Fixtures.send_delay = .15
+                # Secondary pages retain the active chat and its pending request.
+                Fixtures.send_delay = .6
+                fill('Navigation draft'); click('[aria-label="Send message"]')
+                fill('Next draft while navigating')
+                click('[aria-label="Manage projects"]')
+                wait("document.querySelector('.page-header h2')?.textContent === 'Projects'")
+                assert evaluate("document.querySelector('.chat-surface').hidden && getComputedStyle(document.querySelector('.chat-surface')).display === 'none'")
+                click('.sidebar-brand'); wait("document.querySelector('.launch-pad:not([hidden])') !== null"); click('.launch-recents button')
+                wait("!document.querySelector('.chat-surface').hidden && document.querySelector('.chat-progress') === null")
+                assert evaluate("document.querySelector('textarea').value") == 'Next draft while navigating'
+                wait("Boolean(document.querySelector('img[alt=\"Project preview\"]')?.naturalWidth)")
+                assert evaluate("document.querySelector('img[alt=\"Project preview\"]').getAttribute('src')") == '/api/workspace/image?path=%2Fworkspace%2Fcodex-webui-2%2F.%2Frelative-review.png'
+                screenshot('desktop-navigation-retained.png')
+                Fixtures.send_delay = .15
+
+                # A slow previous query cannot replace a newer remote result.
+                def search(value):
+                    evaluate(f"(() => {{ const input=document.querySelector('[aria-label=\"Search all resumable chats\"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,{json.dumps(value)}); input.dispatchEvent(new Event('input',{{bubbles:true}})); return true; }})()")
+                if not evaluate("Boolean(document.querySelector('.sidebar-search'))"):
+                    click('[aria-label="Search chats"]')
+                search('alpha')
+                for _ in range(100):
+                    if 'alpha' in Fixtures.search_queries: break
+                    time.sleep(.05)
+                assert 'alpha' in Fixtures.search_queries
+                search('  beta  ')
+                wait("Boolean(document.querySelector('.chat-row')?.textContent.includes('beta remote result'))")
+                time.sleep(1.1)
+                assert evaluate("document.querySelector('.chat-row')?.textContent.includes('beta remote result')")
+                click('[aria-label="Close chat search"]')
+                wait("Boolean(document.querySelector('.chat-row')?.textContent.includes('A calmer place to build'))")
                 Fixtures.fail_route = True
                 before = len(Fixtures.calls)
                 exact_failed_draft = '  Preserve this failed draft\n '
@@ -261,17 +365,31 @@ def main():
                 wait("document.querySelector('.chat-sidebar') === null")
                 assert not evaluate('document.documentElement.scrollWidth > innerWidth')
                 screenshot('phone.png')
+                click('.composer .context-button')
+                wait("document.querySelector('.context-tooltip') !== null")
+                assert evaluate("(() => { const r=document.querySelector('.context-tooltip').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight })()")
+                screenshot('phone-context-tooltip.png')
+                key('\ue00c')
+                viewport(320, 640)
+                click('.composer .context-button')
+                wait("document.querySelector('.context-tooltip') !== null")
+                assert not evaluate('document.documentElement.scrollWidth > innerWidth')
+                assert evaluate("(() => { const r=document.querySelector('.context-tooltip').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth })()")
+                screenshot('narrow-context-tooltip.png')
+                key('\ue00c')
+                viewport(390, 844)
                 fill('@'); wait("document.querySelector('.plugin-suggestions') !== null")
                 assert not evaluate('document.documentElement.scrollWidth > innerWidth')
                 screenshot('phone-plugins.png')
                 key('\ue00c'); fill(exact_failed_draft)
                 click('[aria-label="Expand conversations"]'); wait("document.querySelector('.chat-sidebar') !== null")
                 screenshot('phone-navigation.png')
-                click('.new-chat'); wait("document.querySelector('.chat-welcome') !== null && document.querySelector('textarea') !== null")
+                click('.new-chat'); wait("document.querySelector('.launch-pad:not([hidden])') !== null")
+                assert evaluate("document.querySelector('.launch-auto')?.textContent.includes('Jev')")
                 assert evaluate("document.querySelector('.chat-sidebar') === null")
                 screenshot('phone-new-chat.png')
                 click('[aria-label="Expand conversations"]'); wait("document.querySelector('.chat-sidebar') !== null")
-                click('.sidebar-nav button'); wait("document.querySelector('.page-header h2')?.textContent === 'Projects'")
+                click('[aria-label="Manage projects"]'); wait("document.querySelector('.page-header h2')?.textContent === 'Projects'")
                 assert evaluate("document.querySelector('[aria-label=\"Expand conversations\"]') !== null")
                 Fixtures.fail_bootstrap = True
                 bidi.command('browsingContext.navigate', {'context': context, 'url': f'http://127.0.0.1:{server.server_port}', 'wait': 'complete'})
@@ -282,11 +400,24 @@ def main():
                 click('.loading-screen button'); wait("document.querySelector('.app-shell') !== null")
                 click('[aria-label="Expand conversations"]'); wait("document.querySelector('.history-notice [type=button]') !== null")
                 Fixtures.fail_history = False
-                click('.history-notice button'); wait("document.querySelector('.message.assistant') !== null && document.querySelector('.chat-progress') === null")
+                click('.history-notice button'); wait("document.querySelector('.launch-recents button') !== null"); click('.launch-recents button'); wait("document.querySelector('.message.assistant') !== null && document.querySelector('.chat-progress') === null")
+                if evaluate("document.querySelector('.chat-sidebar') !== null"): click('[aria-label="Collapse conversations"]')
+                wait("document.querySelector('.chat-sidebar') === null")
+                assert evaluate("document.querySelector('.chat-model-select')?.textContent.includes('6-luna') && document.querySelector('.chat-model-effort')?.textContent.includes('medium')")
+                screenshot('phone-restored-effort.png')
                 assert not evaluate('document.documentElement.scrollWidth > innerWidth')
+                recorded = THREAD['turns'][0].pop('webui')
+                try:
+                    bidi.command('browsingContext.navigate', {'context': context, 'url': f'http://127.0.0.1:{server.server_port}', 'wait': 'complete'})
+                    wait("document.querySelector('.launch-recents button') !== null"); click('.launch-recents button')
+                    wait("document.querySelector('.message.assistant') !== null && document.querySelector('.chat-progress') === null")
+                    assert evaluate("document.querySelector('.message.assistant .message-effort')?.textContent.includes('effort unknown') && document.querySelector('.chat-model-select')?.textContent.includes('Jev') && !document.querySelector('.chat-model-effort')")
+                    screenshot('phone-unknown-effort.png')
+                finally:
+                    THREAD['turns'][0]['webui'] = recorded
                 errors = [event for event in bidi.events if event.get('method') == 'log.entryAdded' and event.get('params', {}).get('level') == 'error' and event.get('params', {}).get('type') == 'javascript']
                 assert not errors, errors
-                (output / 'checks.json').write_text(json.dumps({'syntheticFixtures': True, 'desktop': measurements, 'phone': {'width': 390, 'height': 844}, 'checks': ['geometry', 'collapsed activity', 'context panel', 'single backend send', 'exact padded input', 'failed draft retained', 'phone no overflow', 'exclusive navigation', 'new chat', 'secondary page access'], 'featureChecks': ['shell before slow history', '@ plugin keyboard selection and native metadata', 'draft edited during send', 'inline images decoded and modal Escape/focus', 'one turn spinner, no bottom plate', 'last context total and hover limit', 'explicit startup error and history retry', 'phone plugin menu without overflow'], 'uncaughtErrors': len(errors)}, indent=2) + '\n')
+                (output / 'checks.json').write_text(json.dumps({'syntheticFixtures': True, 'desktop': measurements, 'phone': {'width': 390, 'height': 844}, 'checks': ['geometry', 'collapsed activity', 'context panel', 'single backend send', 'exact padded input', 'failed draft retained', 'phone no overflow', 'exclusive navigation', 'new chat', 'secondary page access'], 'featureChecks': ['shell before slow history', '@ skill/plugin/app/file selection and native metadata', 'per-message effort survives later model selections', 'Auto header restores recorded effort and leaves unknown effort explicit', 'fast typing after mentions survives delayed frames', 'deleted plugin mention does not reactivate implicitly', 'draft edited during send', 'pending send and draft survive secondary pages', 'stale searches cannot replace current results', 'relative Markdown images resolve in the project', 'inline images decoded and modal Escape/focus', 'one turn spinner, no bottom plate', 'last context total and hover limit', 'explicit startup error and history retry', 'phone plugin menu without overflow'], 'uncaughtErrors': len(errors)}, indent=2) + '\n')
                 print('Browser checks passed: desktop 1440×1000, phone 390×844, one backend send and exact whitespace preservation.')
             finally:
                 server.stopping = True; server.shutdown()

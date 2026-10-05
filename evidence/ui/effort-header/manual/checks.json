@@ -1,0 +1,24 @@
+{
+  "syntheticFixtures": true,
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "320x640"
+  ],
+  "checks": [
+    "menu choices",
+    "native acknowledgement gate",
+    "pending send disabled",
+    "draft retained",
+    "keyboard End/Enter/Escape and focus",
+    "saved selection after reload",
+    "rejected change retains choice",
+    "touch targets and no overflow",
+    "active turn disables changes",
+    "permission buttons never send a prompt",
+    "manual model and effort selection",
+    "model selection persistence and rejected-change retention",
+    "speed control at phone widths"
+  ],
+  "uncaughtJavaScriptErrors": 0
+}

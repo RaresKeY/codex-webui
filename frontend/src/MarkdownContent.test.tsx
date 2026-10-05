@@ -37,4 +37,11 @@ describe('MarkdownContent', () => {
     expect(unsafe).toContain('Image unavailable')
     expect(unsafe).not.toContain('src="https:')
   })
+
+  it('resolves relative Markdown images in the conversation workspace', () => {
+    const html = renderToStaticMarkup(<MarkdownContent cwd="/workspace/project" source={'![Preview](./images/a.png)\n\n![Absolute](/workspace/shared.png)'} />)
+    expect(html).toContain('path=%2Fworkspace%2Fproject%2F.%2Fimages%2Fa.png')
+    expect(html).toContain('path=%2Fworkspace%2Fshared.png')
+    expect(html).not.toContain('path=.%2Fimages')
+  })
 })

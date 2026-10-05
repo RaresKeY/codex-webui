@@ -1,7 +1,8 @@
-export type View = 'chat' | 'projects' | 'schedules' | 'images' | 'settings'
+export type View = 'new' | 'chat' | 'archived' | 'projects' | 'schedules' | 'images' | 'settings'
 export type ConnectionState = 'connecting' | 'online' | 'demo' | 'offline'
 export type EventKind = 'message' | 'image' | 'reasoning' | 'command' | 'file' | 'approval' | 'status'
 export type VoiceState = 'idle' | 'connecting' | 'live' | 'stopping' | 'error' | 'unsupported'
+export type PermissionMode = 'default' | 'full-auto' | 'yolo'
 export type TurnPhase = 'idle' | 'waiting' | 'streaming' | 'completed' | 'interrupted' | 'failed'
 
 export interface TurnLifecycle {
@@ -41,12 +42,17 @@ export interface Project {
 export interface Conversation {
   id: string
   projectId: string
+  pinned?: boolean
+  unread?: boolean
   title: string
   preview: string
   updatedAt: string
+  updatedAtEpoch?: number
   status: 'ready' | 'running' | 'paused' | 'failed'
   cwd: string
   model: string
+  lastTurnModel?: string
+  lastTurnEffort?: string
   contextPercent: number
   contextUsedTokens?: number
   contextWindowTokens?: number
@@ -62,6 +68,11 @@ export interface Plugin {
   name: string
   displayName: string
   description: string
+}
+
+export interface Mention extends Plugin {
+  kind: 'skill' | 'plugin' | 'app' | 'file'
+  insertText: string
 }
 
 export interface StreamEvent {
@@ -118,6 +129,9 @@ export interface Schedule {
 }
 
 export interface Usage {
+  primaryLabel?: string
+  secondaryLabel?: string
+  secondaryResetsAt?: string
   fiveHourPercent: number | null
   weeklyPercent: number | null
   lifetimeTokens: number | null
@@ -152,7 +166,9 @@ export interface BootstrapPayload {
 }
 
 export interface LiveUpdate {
+  lifecycle?: 'archived' | 'deleted' | 'restored'
   selectedModel?: string
+  selectedEffort?: string
   event?: StreamEvent
   turn?: TurnSignal
   contextPercent?: number

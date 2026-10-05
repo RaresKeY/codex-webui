@@ -329,8 +329,8 @@ class CodexAppServerClient:
             self._server_requests[str(request_id)] = item
         await self._publish(message)
 
-    async def publish_model_selection(self, thread_id: str, model: str) -> None:
-        await self._publish({"method": "webui/modelSelected", "params": {"threadId": thread_id, "model": model}})
+    async def publish_model_selection(self, thread_id: str, model: str, effort: str) -> None:
+        await self._publish({"method": "webui/modelSelected", "params": {"threadId": thread_id, "model": model, "effort": effort}})
 
     async def _publish(self, message: dict[str, Any]) -> None:
         for queue in tuple(self._subscribers):

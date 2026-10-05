@@ -1,0 +1,19 @@
+# New chat launch page
+
+Default startup and New chat open the launch page without creating or reading a selected conversation. An optional-project prompt composer sits above the newest ten indexed conversations. Sending clears the composer immediately and creates an independent thread; the page stays open and accepts more prompts while earlier preparations and native turns run. Up to ten preparations may be pending in this tab. Native turns have no additional UI concurrency cap.
+
+The exact draft, including surrounding whitespace, reaches the existing backend routed-message operation. Normal New chat defaults to No project and uses the workspace root; selecting a project explicitly assigns it and uses its workspace. Quick launch uses Auto/Jev and the saved new-chat permission preference (Default if none exists); explicit model, permissions, structured mentions, attachments and voice remain available inside an opened chat. Model acknowledgement precedes submission. No mutation is automatically retried. Creation/routing failures retain an explicit Restore prompt action. Pending preparations and failed drafts live in the mounted page, not durable browser storage; reloading during preparation can lose an unsent draft.
+
+Running chats show one spinner per list entry. Completed replies show a blue unread dot until opened. Failed/interrupted turns are not successful unread completions. A global activity WebSocket forwards only turn start/completion, errors and title changes, never transcript deltas. Read-only history reconciliation runs on reconnect and every ten seconds, ignores stale reads after activity changes, and preserves local preparation/failure state. Browser storage contains at most 100 unread thread IDs, without prompts or content. Recently indexed chats are sorted by native update timestamp; locally spawned chats receive their submission time.
+
+Sources: `frontend/src/LaunchPad.tsx`, `ChatActivityMark.tsx`, `chat-activity.ts`, `unread-chats.ts`, `App.tsx`, `api.ts`, and `backend/app/main.py`. Verification: activity reducer tests, backend subscription/filter tests, and `tools/check_launch_browser.py` cover overlapping exact asks, no navigation, active/completed indicators, reload persistence, prompt recovery, completion before HTTP acknowledgement and desktop/phone layouts using synthetic fixtures, without paid execution.
+
+History reconciliation also discovers externally created threads and refreshes native timestamps without overwriting acknowledged per-chat model, project, pin or context values with list defaults. Failed prompt recovery remains visible even after its chat falls outside the ten recent rows. Duplicate terminal notifications are idempotent, and native idle metadata preserves locally observed failed/interrupted outcomes.
+
+Project navigation opens the same persistent quick composer scoped to that project and its last ten chats. The Projects page offers folder cards, new-project creation and scoped prompting by default; pending jobs retain the project captured at send time. Recorded model/effort labels appear at the bottom and in recent rows, never inferred from the native thread default. See `project_launch.md`.
+
+## Gaps
+
+- Reloading during preparation does not durably preserve unsent drafts.
+- Quick launch does not include the full chat composer’s structured mention, attachment or voice controls.
+- When native history omits terminal outcome details and completion events are missed, reconciliation cannot distinguish success from an idle failed turn.

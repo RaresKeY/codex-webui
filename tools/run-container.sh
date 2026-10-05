@@ -11,10 +11,29 @@ if [ ! -d "$CODEX_STATE" ]; then
   printf '%s\n' 'Codex state directory is missing. Sign in with the standalone CLI first.' >&2
   exit 1
 fi
-DETACH=${1:-}
-if [ -n "$DETACH" ] && [ "$DETACH" != "--detach" ]; then
-  printf '%s\n' 'Usage: tools/run-container.sh [--detach]' >&2
-  exit 1
+CODEX_STATE=$(realpath -- "$CODEX_STATE")
+DETACH=false
+TAILSCALE=false
+for option in "$@"; do
+  case "$option" in
+    --detach) DETACH=true ;;
+    --tailscale) TAILSCALE=true ;;
+    *) printf '%s\n' 'Usage: tools/run-container.sh [--detach] [--tailscale]' >&2; exit 1 ;;
+  esac
+done
+ALLOWED_HOSTS=127.0.0.1,localhost
+ALLOWED_ORIGINS="http://127.0.0.1:$PORT,http://localhost:$PORT"
+if [ "$TAILSCALE" = true ]; then
+  TAILSCALE_HOST=$(tailscale status --json | python3 -c '
+import json, sys
+status = json.load(sys.stdin)
+host = (status.get("Self", {}).get("DNSName") or "").rstrip(".")
+if status.get("BackendState") != "Running" or not host.endswith(".ts.net"):
+    sys.exit("Connect Tailscale with a canonical .ts.net hostname first.")
+print(host)
+')
+  ALLOWED_HOSTS="$ALLOWED_HOSTS,$TAILSCALE_HOST"
+  ALLOWED_ORIGINS="$ALLOWED_ORIGINS,https://$TAILSCALE_HOST"
 fi
 set -- --rm --name codex-webui-2 --label app=codex-webui-2 \
   --userns=keep-id --user "$(id -u):$(id -g)" --cap-drop=ALL --security-opt=no-new-privileges \
@@ -22,13 +41,21 @@ set -- --rm --name codex-webui-2 --label app=codex-webui-2 \
   --volume "$WORKSPACE_ROOT:$WORKSPACE_ROOT:rw" --volume "$CODEX_STATE:/codex:rw" \
   --volume codex-webui-2-data:/data \
   --env "CODEX_WEBUI_WORKSPACE_ROOT=$WORKSPACE_ROOT" \
-  --env "CODEX_WEBUI_ALLOWED_ORIGINS=http://127.0.0.1:$PORT,http://localhost:$PORT" \
+  --env "CODEX_WEBUI_CODEX_STATE_SOURCE_DIR=$CODEX_STATE" \
+  --env "CODEX_WEBUI_ALLOWED_HOSTS=$ALLOWED_HOSTS" \
+  --env "CODEX_WEBUI_ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
   --env "CODEX_WEBUI_REALTIME_FEATURE_ENABLED=${CODEX_WEBUI_REALTIME_FEATURE_ENABLED:-true}"
 if [ -f "$JEV_KEY_FILE" ]; then
-  set -- "$@" --volume "$JEV_KEY_FILE:/run/secrets/jev.env:ro" --env CODEX_WEBUI_JEV_KEY_FILE=/run/secrets/jev.env
+  JEV_KEY_FILE=$(realpath -- "$JEV_KEY_FILE")
+  set -- "$@" --volume "$JEV_KEY_FILE:/run/secrets/jev.env:ro" \
+    --env CODEX_WEBUI_JEV_KEY_FILE=/run/secrets/jev.env \
+    --env "CODEX_WEBUI_JEV_KEY_SOURCE_FILE=$JEV_KEY_FILE"
 fi
-if [ "$DETACH" = "--detach" ]; then
+if [ "$DETACH" = true ]; then
   set -- "$@" --detach
 fi
 printf 'Codex WebUI 2: http://127.0.0.1:%s\n' "$PORT"
+if [ "$TAILSCALE" = true ]; then
+  printf 'Private Tailscale URL: https://%s (requires Tailscale Serve)\n' "$TAILSCALE_HOST"
+fi
 exec podman run "$@" "$IMAGE"

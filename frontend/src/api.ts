@@ -3,7 +3,7 @@ import { contentImages, imageSource } from './images'
 import { contextUsage } from './context-usage'
 import { UNTITLED_CONVERSATION } from './conversation-title'
 import type { RealtimeVoice, RealtimeVoicesList, WebRtcRealtimeVersion } from './app-server-protocol'
-import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Plugin, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
+import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Mention, PermissionMode, Plugin, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
 type JsonObject = Record<string, unknown>
@@ -97,19 +97,25 @@ export function normalizeConversation(value: unknown, fallbackProject = ''): Con
   const outer = object(value)
   const item = object(outer.thread ?? outer)
   const webui = object(item.webui)
+  const timestamp = item.updatedAt ?? item.updated_at ?? item.createdAt ?? item.created_at
+  const epoch = typeof timestamp === 'number' ? timestamp < 1e12 ? timestamp * 1000 : timestamp : typeof timestamp === 'string' ? Date.parse(timestamp) : NaN
   const turns = array(item.turns)
   const lastTurn = object(turns.at(-1))
-  const rawStatus = typeof item.status === 'string' ? item.status : text(object(item.status).type)
+  const nativeStatus = typeof item.status === 'string' ? item.status : text(object(item.status).type)
+  const rawStatus = (nativeStatus === 'idle' || !nativeStatus) && (lastTurn.status === 'failed' || lastTurn.status === 'interrupted') ? String(lastTurn.status) : nativeStatus
   const status: Conversation['status'] = rawStatus === 'active' || rawStatus === 'running' ? 'running' : rawStatus === 'paused' || rawStatus === 'interrupted' ? 'paused' : rawStatus === 'failed' || rawStatus === 'error' || rawStatus === 'systemError' ? 'failed' : 'ready'
   return {
     id: String(item.id ?? item.threadId ?? crypto.randomUUID()),
-    projectId: String(webui.project_id ?? item.projectId ?? fallbackProject),
+    projectId: webui.project_id === null ? '' : String(webui.project_id ?? item.projectId ?? fallbackProject),
+    pinned: webui.pinned === true || webui.pinned === 1,
     title: text(item.name ?? item.title, 'Untitled conversation'),
     preview: text(item.preview ?? lastTurn.preview ?? item.lastMessage, 'Resumable local Codex session'),
-    updatedAt: timeLabel(item.updatedAt ?? item.updated_at ?? item.createdAt ?? item.created_at),
+    updatedAt: timeLabel(timestamp),
+    ...(Number.isFinite(epoch) ? { updatedAtEpoch: epoch } : {}),
     status,
     cwd: text(item.cwd, '.'),
     model: text(item.model, 'gpt-6.1-sol'),
+    ...(optionalText(webui.last_turn_model) ? { lastTurnModel: text(webui.last_turn_model), lastTurnEffort: optionalText(webui.last_turn_effort) } : {}),
     contextPercent: Math.round(number(item.contextPercent ?? item.context_percent)),
   }
 }
@@ -181,15 +187,6 @@ function normalizeSchedule(value: unknown): Schedule {
   }
 }
 
-function pickNumber(root: JsonObject, paths: string[][]): number {
-  for (const path of paths) {
-    let value: unknown = root
-    for (const key of path) value = object(value)[key]
-    if (typeof value === 'number') return value
-  }
-  return 0
-}
-
 function pickOptionalNumber(root: JsonObject, paths: string[][]): number | null {
   for (const path of paths) {
     let value: unknown = root
@@ -199,20 +196,47 @@ function pickOptionalNumber(root: JsonObject, paths: string[][]): number | null 
   return null
 }
 
+function limitUsedPercent(window: JsonObject): number | null {
+  const used = pickOptionalNumber(window, [['usedPercent'], ['used_percent']])
+  return used === null || used < 0 || used > 100 ? null : Math.round(used)
+}
+
+function limitWindowLabel(window: JsonObject, fallback: string): string {
+  const minutes = pickOptionalNumber(window, [['windowDurationMins'], ['window_duration_mins']])
+  if (minutes === 300) return '5-hour limit'
+  if (minutes === 10080) return 'Weekly limit'
+  if (minutes === 43200) return 'Monthly limit'
+  if (minutes === null || minutes <= 0) return fallback
+  return minutes % 1440 === 0 ? `${minutes / 1440}-day limit` : minutes % 60 === 0 ? `${minutes / 60}-hour limit` : `${minutes}-minute limit`
+}
+
+function limitResetLabel(value: unknown, fallback = 'Unavailable'): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallback
+  const delta = (value * 1000 - Date.now()) / 60000
+  if (!Number.isFinite(delta)) return fallback
+  const minutes = Math.max(0, Math.round(delta))
+  if (minutes < 60) return `in ${minutes}m`
+  if (minutes < 1440) return `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  return `in ${Math.floor(minutes / 1440)}d ${Math.floor(minutes % 1440 / 60)}h`
+}
+
 export function normalizeUsage(value: unknown, sessionCount: number): Usage {
   const item = object(value)
   const limitsEnvelope = object(item.rateLimits)
-  const limits = object(limitsEnvelope.rateLimits)
+  const buckets = object(limitsEnvelope.rateLimitsByLimitId)
+  const codexBucket = Object.entries(buckets).find(([key]) => key.toLowerCase() === 'codex')?.[1]
+  const limits = object(codexBucket ?? limitsEnvelope.rateLimits)
   const summary = object(object(item.usage).summary)
   const primary = object(limits.primary)
   const secondary = object(limits.secondary)
   const resetValue = primary.resetsAt ?? primary.resets_at
-  const resetDate = typeof resetValue === 'number' ? new Date(resetValue * 1000) : null
-  const resetMinutes = resetDate ? Math.max(0, Math.round((resetDate.getTime() - Date.now()) / 60000)) : null
-  const resetsAt = resetMinutes !== null ? resetMinutes < 60 ? `in ${resetMinutes}m` : `in ${Math.floor(resetMinutes / 60)}h ${resetMinutes % 60}m` : text(resetValue, sessionCount ? 'Unavailable' : 'No usage data')
+  const resetsAt = limitResetLabel(resetValue, sessionCount ? 'Unavailable' : 'No usage data')
   return {
-    fiveHourPercent: Object.keys(primary).length ? Math.round(pickNumber(limits, [['primary', 'usedPercent'], ['primary', 'used_percent']])) : null,
-    weeklyPercent: Object.keys(secondary).length ? Math.round(pickNumber(limits, [['secondary', 'usedPercent'], ['secondary', 'used_percent']])) : null,
+    fiveHourPercent: limitUsedPercent(primary),
+    primaryLabel: limitWindowLabel(primary, 'Primary limit'),
+    weeklyPercent: limitUsedPercent(secondary),
+    secondaryLabel: limitWindowLabel(secondary, 'Secondary limit'),
+    secondaryResetsAt: limitResetLabel(secondary.resetsAt ?? secondary.resets_at),
     lifetimeTokens: pickOptionalNumber(summary, [['lifetimeTokens'], ['lifetime_tokens']]),
     peakDailyTokens: pickOptionalNumber(summary, [['peakDailyTokens'], ['peak_daily_tokens']]),
     currentStreakDays: pickOptionalNumber(summary, [['currentStreakDays'], ['current_streak_days']]),
@@ -229,7 +253,7 @@ function normalizeBootstrap(raw: unknown): BootstrapPayload {
   const item = object(raw)
   const projects = array(item.projects).map(normalizeProject)
   const rawThreads = object(item.threads).data ?? item.threads
-  const conversations = array(rawThreads).map(thread => normalizeConversation(thread, projects[0]?.id))
+  const conversations = array(rawThreads).map(thread => normalizeConversation(thread))
   const counts = new Map<string, number>()
   conversations.forEach(chat => counts.set(chat.projectId, (counts.get(chat.projectId) ?? 0) + 1))
   projects.forEach(project => { project.chatCount = counts.get(project.id) ?? 0 })
@@ -307,7 +331,12 @@ function eventsFromThread(raw: unknown): StreamEvent[] {
   const thread = object(outer.thread ?? outer)
   return array(thread.turns).flatMap((turn, turnIndex) => {
     const record = object(turn)
-    return array(record.items ?? record.events ?? record.messages).map((item, itemIndex) => normalizeItem(item, turnIndex * 1000 + itemIndex)).filter((event): event is StreamEvent => Boolean(event))
+    return array(record.items ?? record.events ?? record.messages).map((item, itemIndex) => {
+      const event = normalizeItem(item, turnIndex * 1000 + itemIndex)
+      const selection = object(record.webui)
+      if (event && event.role === 'assistant' && text(selection.model)) event.meta = { ...event.meta, model: text(selection.model), ...(text(selection.effort) ? { effort: text(selection.effort) } : {}) }
+      return event
+    }).filter((event): event is StreamEvent => Boolean(event))
   })
 }
 
@@ -363,7 +392,10 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   const threadId = text(params.threadId)
   const turn = object(params.turn)
   const turnId = text(params.turnId ?? turn.id) || undefined
-  if (method === 'webui/modelSelected') return { selectedModel: text(params.model) }
+  if (method === 'thread/archived') return { lifecycle: 'archived' }
+  if (method === 'thread/deleted') return { lifecycle: 'deleted' }
+  if (method === 'thread/unarchived') return { lifecycle: 'restored' }
+  if (method === 'webui/modelSelected') return { selectedModel: text(params.model), ...(optionalText(params.effort) ? { selectedEffort: text(params.effort) } : {}) }
   if (method === 'thread/name/updated') return { conversationTitle: text(params.threadName).trim() || UNTITLED_CONVERSATION }
   if (method === 'turn/started' && turnId) return { turn: { kind: 'started', turnId } }
   if (method === 'turn/completed' && turnId) {
@@ -465,6 +497,25 @@ export async function loadConversationSnapshot(conversationId: string, demoMode 
   }
 }
 
+function normalizeMention(value: unknown): Mention | null {
+  const entry = object(value)
+  const kind = text(entry.kind) as Mention['kind']
+  if (!['skill', 'plugin', 'app', 'file'].includes(kind) || !text(entry.id) || !text(entry.insertText)) return null
+  return { id: text(entry.id), kind, name: text(entry.name), displayName: text(entry.displayName), description: text(entry.description), insertText: text(entry.insertText) }
+}
+
+export async function loadMentions(cwd: string, threadId: string, signal?: AbortSignal): Promise<{ entries: Mention[]; errors: string[] }> {
+  const result = object(await request<unknown>(`/mentions?cwd=${encodeURIComponent(cwd)}&thread_id=${encodeURIComponent(threadId)}`, { signal }))
+  if (!Array.isArray(result.data) || !Array.isArray(result.errors)) throw new Error('Invalid mention catalog')
+  return { entries: array(result.data).map(normalizeMention).filter((entry): entry is Mention => entry !== null), errors: array(result.errors).map(error => text(object(error).message)).filter(Boolean) }
+}
+
+export async function loadMentionFiles(cwd: string, query: string, signal?: AbortSignal): Promise<Mention[]> {
+  const result = object(await request<unknown>(`/mention-files?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(query)}`, { signal }))
+  if (!Array.isArray(result.data)) throw new Error('Invalid file catalog')
+  return array(result.data).map(normalizeMention).filter((entry): entry is Mention => entry !== null)
+}
+
 export async function loadFile(path: string, demoMode = false): Promise<FileReadResult> {
   try { return { content: (await request<{ content: string }>(`/workspace/file?path=${encodeURIComponent(path)}`)).content } }
   catch (error) {
@@ -500,11 +551,43 @@ export interface RoutingDecision {
 }
 export type RoutingStage = 'routing' | 'switching' | 'sending'
 
-export async function sendPrompt(conversationId: string, prompt: string, onProgress?: (stage: RoutingStage, decision?: RoutingDecision) => void, signal?: AbortSignal, plugins: string[] = []): Promise<{ turnId?: string; decision: RoutingDecision }> {
+function readPermissionMode(raw: unknown): PermissionMode {
+  const mode = object(raw).mode
+  if (mode !== 'default' && mode !== 'full-auto' && mode !== 'yolo') throw new Error('The service returned unknown permissions. Choose permissions again.')
+  return mode
+}
+
+export async function loadChatPermissions(threadId: string, signal?: AbortSignal): Promise<PermissionMode> {
+  return readPermissionMode(await request(`/threads/${encodeURIComponent(threadId)}/permissions`, { signal }))
+}
+
+export async function setChatPermissions(threadId: string, mode: PermissionMode): Promise<PermissionMode> {
+  const response = await request<unknown>(`/threads/${encodeURIComponent(threadId)}/permissions`, { method: 'PATCH', body: JSON.stringify({ mode }) })
+  if (object(response).acknowledged !== true || readPermissionMode(response) !== mode) throw new Error('Codex did not confirm the permission change. Check permissions before sending.')
+  return mode
+}
+
+export interface ChatExecution { model: 'auto' | 'gpt-6.1-sol' | 'gpt-6-luna'; effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+function readExecution(raw: unknown): ChatExecution {
+  const value = object(raw)
+  if (!['auto', 'gpt-6.1-sol', 'gpt-6-luna'].includes(String(value.model)) || !['low', 'medium', 'high', 'xhigh', 'max'].includes(String(value.effort))) throw new Error('The model selection could not be confirmed.')
+  return { model: value.model, effort: value.effort } as ChatExecution
+}
+export async function loadChatExecution(threadId: string, signal?: AbortSignal): Promise<ChatExecution> {
+  return readExecution(await request(`/threads/${encodeURIComponent(threadId)}/execution`, { signal }))
+}
+export async function setChatExecution(threadId: string, choice: ChatExecution): Promise<ChatExecution> {
+  const raw = await request(`/threads/${encodeURIComponent(threadId)}/execution`, { method: 'PATCH', body: JSON.stringify(choice) })
+  const value = readExecution(raw)
+  if (object(raw).acknowledged !== true || value.model !== choice.model || value.effort !== choice.effort) throw new Error('The model selection could not be confirmed.')
+  return value
+}
+
+export async function sendPrompt(conversationId: string, prompt: string, onProgress?: (stage: RoutingStage, decision?: RoutingDecision) => void, signal?: AbortSignal, plugins: string[] = [], mentions: string[] = []): Promise<{ turnId?: string; decision: RoutingDecision }> {
   signal?.throwIfAborted()
   onProgress?.('routing')
   const response = await fetchResponse(`/threads/${encodeURIComponent(conversationId)}/messages`, {
-    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: JSON.stringify({ input: prompt, ...(plugins.length ? { plugins } : {}) }), signal,
+    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: JSON.stringify({ input: prompt, ...(plugins.length ? { plugins } : {}), ...(mentions.length ? { mentions } : {}) }), signal,
   })
   let stage: RoutingStage = 'routing'
   let final: { turnId?: string; decision: RoutingDecision } | undefined
@@ -571,17 +654,38 @@ export async function loadRealtimeCapability(conversationId: string): Promise<Re
 export async function createConversation(options: { projectId?: string; cwd?: string; model?: string } = {}): Promise<Conversation> {
   const raw = await request<unknown>('/threads', { method: 'POST', body: JSON.stringify({ cwd: options.cwd ?? '.', model: options.model }) })
   const conversation = normalizeConversation(raw, options.projectId)
-  if (options.projectId && conversation.id) await request(`/threads/${encodeURIComponent(conversation.id)}/metadata`, { method: 'PATCH', body: JSON.stringify({ project_id: Number(options.projectId) }) })
+  if (options.projectId && conversation.id) {
+    await request(`/threads/${encodeURIComponent(conversation.id)}/metadata`, { method: 'PATCH', body: JSON.stringify({ project_id: Number(options.projectId) }) })
+    conversation.projectId = options.projectId
+  }
   return conversation
 }
 
-export async function searchConversations(query: string): Promise<Conversation[]> {
-  const result = await request<unknown>(`/threads?q=${encodeURIComponent(query)}&limit=100`)
+export async function searchConversations(query: string, signal?: AbortSignal): Promise<Conversation[]> {
+  const result = await request<unknown>(`/threads?q=${encodeURIComponent(query)}&limit=100`, { signal })
   return array(object(result).data ?? result).map(thread => normalizeConversation(thread))
 }
 
 export async function assignConversationProject(conversationId: string, projectId: string): Promise<void> {
-  await request(`/threads/${encodeURIComponent(conversationId)}/metadata`, { method: 'PATCH', body: JSON.stringify({ project_id: Number(projectId) }) })
+  await request(`/threads/${encodeURIComponent(conversationId)}/metadata`, { method: 'PATCH', body: JSON.stringify({ project_id: projectId ? Number(projectId) : null }) })
+}
+
+export async function archiveConversation(id: string): Promise<void> {
+  await request(`/threads/${encodeURIComponent(id)}/archive`, { method: 'POST' })
+}
+export async function restoreConversation(id: string): Promise<Conversation> {
+  return normalizeConversation(await request(`/threads/${encodeURIComponent(id)}/unarchive`, { method: 'POST' }))
+}
+export async function deleteConversation(id: string): Promise<void> {
+  await request(`/threads/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+export async function deleteProject(id: string): Promise<void> {
+  await request(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+export async function loadArchivedConversations(cursor?: string, signal?: AbortSignal): Promise<{ chats: Conversation[]; cursor?: string }> {
+  const raw = object(await request('/threads?archived=true&limit=100' + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''), { signal }))
+  if (raw.degraded === true || !Array.isArray(raw.data)) throw new ApiError(503, 'Archived chats are unavailable. Reconnect and try again.')
+  return { chats: array(raw.data).map(chat => normalizeConversation(chat)), cursor: optionalText(raw.nextCursor) }
 }
 
 export async function renameConversation(conversationId: string, title: string): Promise<void> {
@@ -695,4 +799,38 @@ export function connectConversation(conversationId: string, onUpdate: (update: L
     if (retryTimer !== undefined) window.clearTimeout(retryTimer)
     socket?.close()
   }
+}
+
+export async function pinConversation(id: string, pinned: boolean): Promise<void> {
+  await request(`/threads/${encodeURIComponent(id)}/metadata`, { method: 'PATCH', body: JSON.stringify({ pinned }) })
+}
+
+export async function readChatImageHistory(conversationId: string, signal: AbortSignal): Promise<StreamEvent[]> {
+  const result = await request<unknown>(`/threads/${encodeURIComponent(conversationId)}`, { signal })
+  return eventsFromThread(result)
+}
+
+export function connectChatActivity(onActivity: (threadId: string, update: LiveUpdate) => void, onReady: () => void, onState: (connected: boolean) => void): () => void {
+  const endpoint = new URL(`${API_BASE}/activity`, location.href)
+  endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:'
+  let stopped = false
+  let socket: WebSocket | undefined
+  let timer: number | undefined
+  const open = () => {
+    if (stopped) return
+    socket = new WebSocket(endpoint)
+    socket.onopen = () => { onState(true); onReady() }
+    socket.onmessage = message => {
+      let raw: unknown
+      try { raw = JSON.parse(message.data) } catch { return }
+      const params = object(object(raw).params)
+      const threadId = text(params.threadId ?? params.thread_id)
+      const update = notificationUpdate(raw)
+      if (threadId && update) onActivity(threadId, update)
+    }
+    socket.onclose = () => { if (!stopped) { onState(false); timer = window.setTimeout(open, 1000) } }
+    socket.onerror = () => onState(false)
+  }
+  open()
+  return () => { stopped = true; if (timer !== undefined) clearTimeout(timer); socket?.close() }
 }

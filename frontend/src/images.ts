@@ -3,7 +3,7 @@ import type { MessageImage } from './types'
 const rasterData = /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/=\r\n]+$/
 const localLibrary = /^\/api\/images\/[a-f0-9]{32}\.(?:png|jpg|gif|webp)$/
 
-export function imageSource(source: string): string | undefined {
+export function imageSource(source: string, cwd?: string): string | undefined {
   if (!source || source.length > 28_000_000) return undefined
   if (rasterData.test(source) || localLibrary.test(source)) return source
   if (source.startsWith('/api/workspace/image?path=')) return source
@@ -15,6 +15,7 @@ export function imageSource(source: string): string | undefined {
       path = decodeURIComponent(url.pathname)
     } catch { return undefined }
   } else if (/^[a-z][a-z0-9+.-]*:/i.test(source) || source.startsWith('//')) return undefined
+  if (cwd && !path.startsWith('/')) path = `${cwd.replace(/\/$/, '')}/${path}`
   return `/api/workspace/image?path=${encodeURIComponent(path)}`
 }
 

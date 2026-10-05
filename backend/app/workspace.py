@@ -13,9 +13,13 @@ class UnsafePath(ValueError):
 
 
 class Workspace:
-    def __init__(self, root: Path, max_file_bytes: int) -> None:
+    def __init__(self, root: Path, max_file_bytes: int, protected_paths: tuple[Path, ...] = ()) -> None:
         self.root = root.resolve()
         self.max_file_bytes = max_file_bytes
+        self.protected_paths = tuple(path.resolve() for path in protected_paths)
+
+    def _protected(self, path: Path) -> bool:
+        return any(path.is_relative_to(protected) for protected in self.protected_paths)
 
     def resolve(self, relative: str = ".", *, must_exist: bool = False) -> Path:
         candidate = (self.root / relative).resolve(strict=False)
@@ -23,6 +27,8 @@ class Workspace:
             candidate.relative_to(self.root)
         except ValueError as exc:
             raise UnsafePath("path escapes the configured workspace root") from exc
+        if self._protected(candidate):
+            raise UnsafePath("Credential and Codex state paths are not exposed by the workspace browser")
         if must_exist and not candidate.exists():
             raise FileNotFoundError(relative)
         return candidate
@@ -31,6 +37,13 @@ class Workspace:
         path = self.resolve(relative, must_exist=True)
         if not path.is_dir():
             raise NotADirectoryError(relative)
+
+        def visible(item: Path) -> bool:
+            try:
+                return not self._protected(item.resolve())
+            except (RuntimeError, OSError):
+                # Broken/cyclic links remain opaque entries, never traversed.
+                return True
 
         def entry(item: Path, remaining: int) -> dict[str, Any]:
             if item.is_symlink():
@@ -54,7 +67,10 @@ class Workspace:
                 result["mime"] = mimetypes.guess_type(item.name)[0]
             elif remaining > 0:
                 try:
-                    children = sorted(item.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+                    children = sorted(
+                        (child for child in item.iterdir() if visible(child)),
+                        key=lambda p: (not p.is_dir(), p.name.lower()),
+                    )
                     result["children"] = [entry(child, remaining - 1) for child in children[:1000]]
                     result["truncated"] = len(children) > 1000
                 except PermissionError:
@@ -167,6 +183,8 @@ class Workspace:
                     original_path = records[index].decode("utf-8", "replace")
                     index += 1
             resolved = (git_root / relative_path).resolve(strict=False)
+            if self._protected(resolved):
+                continue
             try:
                 workspace_path = resolved.relative_to(self.root)
             except ValueError:

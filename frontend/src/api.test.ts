@@ -112,6 +112,21 @@ describe('Codex 0.147 adapters', () => {
     })
   })
 
+  it('prefers Codex limits and labels a weekly primary window correctly', () => {
+    const usage = normalizeUsage({ rateLimits: {
+      rateLimits: { primary: { usedPercent: 5 } },
+      rateLimitsByLimitId: { codex: { primary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: 1791580291 }, secondary: null } },
+    } }, 1)
+    expect(usage).toMatchObject({ fiveHourPercent: 100, primaryLabel: 'Weekly limit', weeklyPercent: null })
+  })
+
+  it('does not invent unused capacity from missing or malformed usage', () => {
+    for (const usedPercent of [undefined, null, NaN, Infinity, -1, 101, '20']) {
+      expect(normalizeUsage({ rateLimits: { rateLimits: { primary: { usedPercent, resetsAt: Infinity } } } }, 1)).toMatchObject({ fiveHourPercent: null, resetsAt: 'Unavailable' })
+    }
+    expect(normalizeUsage({ rateLimits: { rateLimits: { primary: { usedPercent: 0, windowDurationMins: 300 }, secondary: { used_percent: 42, window_duration_mins: 10080 } } } }, 1)).toMatchObject({ fiveHourPercent: 0, primaryLabel: '5-hour limit', weeklyPercent: 42, secondaryLabel: 'Weekly limit' })
+  })
+
   it('maps the generated realtime SDP and transcript notifications', () => {
     expect(notificationUpdate({
       method: 'thread/realtime/sdp',
@@ -132,4 +147,28 @@ describe('Codex 0.147 adapters', () => {
       realtime: { kind: 'error', threadId: 'thread-voice', message: 'backend unavailable' },
     })
   })
+})
+
+describe('recent terminal chat states', () => {
+ it('restores failed and interrupted outcomes without overriding an active turn', () => {
+  expect(normalizeConversation({ id: 'a', status: { type: 'idle' }, turns: [{ status: 'failed' }] }).status).toBe('failed')
+  expect(normalizeConversation({ id: 'a', status: 'idle', turns: [{ status: 'interrupted' }] }).status).toBe('paused')
+  expect(normalizeConversation({ id: 'a', status: 'active', turns: [{ status: 'failed' }] }).status).toBe('running')
+ })
+})
+
+describe('project and last-turn metadata', () => {
+ it('does not assign an unassigned chat to a fallback project or invent a used model', () => {
+  expect(normalizeConversation({ id: 'a', webui: { project_id: null } }, 'first').projectId).toBe('')
+  expect(normalizeConversation({ id: 'a' }).lastTurnModel).toBeUndefined()
+  expect(normalizeConversation({ id: 'a', webui: { last_turn_model: 'gpt-6-luna', last_turn_effort: 'low' } })).toMatchObject({ lastTurnModel: 'gpt-6-luna', lastTurnEffort: 'low' })
+ })
+})
+
+describe('native chat lifecycle notifications', () => {
+ it('maps archive/delete/restore without synthesizing turn activity', () => {
+  expect(notificationUpdate({ method: 'thread/archived', params: { threadId: 'a' } })).toEqual({ lifecycle: 'archived' })
+  expect(notificationUpdate({ method: 'thread/deleted', params: { threadId: 'a' } })).toEqual({ lifecycle: 'deleted' })
+  expect(notificationUpdate({ method: 'thread/unarchived', params: { threadId: 'a' } })).toEqual({ lifecycle: 'restored' })
+ })
 })

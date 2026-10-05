@@ -10,5 +10,5 @@ export function pluginQuery(value: string, caret: number): PluginQuery | null {
 }
 
 export function mentionedPluginIds(value: string, plugins: Plugin[], selected: string[]): string[] {
-  return plugins.filter(plugin => selected.includes(plugin.id) && new RegExp(`(^|[^\\w@])@${plugin.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w.-])`).test(value)).map(plugin => plugin.id)
+  return plugins.filter(plugin => selected.includes(plugin.id) && new RegExp(`(^|[^\\p{L}\\p{N}_@])@${plugin.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_.-])`, 'u').test(value)).map(plugin => plugin.id)
 }

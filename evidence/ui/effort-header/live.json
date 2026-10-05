@@ -1,0 +1,21 @@
+{
+  "liveRuntime": true,
+  "privateHttps": true,
+  "secureContext": true,
+  "healthyWss": true,
+  "visibleMentionKinds": [
+    "skill",
+    "plugin",
+    "app"
+  ],
+  "skillSelectionInsertedNativeSyntax": true,
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "320x640"
+  ],
+  "horizontalOverflow": false,
+  "uncaughtJavaScriptErrors": 0,
+  "httpMutations": 0,
+  "paidExecution": false
+}

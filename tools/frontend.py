@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Install exact lockfile tarballs and run frontend tools in an offline Deno container."""
 import argparse
+import fcntl
 import base64
 import hashlib
 import io
@@ -108,4 +109,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    lock_root = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    # Inside the locked host wrapper, the installer has no host runtime-dir mount.
+    if "--inside-install" in __import__("sys").argv:
+        main()
+    else:
+        with (lock_root / "podman-build-retention.lock").open("a") as build_lock:
+            fcntl.flock(build_lock, fcntl.LOCK_SH)
+            main()

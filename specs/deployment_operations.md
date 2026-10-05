@@ -4,16 +4,20 @@
 
 `Containerfile.tools` pins Python 3.12 and Deno 2.9.7 image digests. The runtime pins the Python base and `backend/requirements.lock.txt`, copies only app source and the current validated `frontend/dist`, and obtains standalone Codex/codex-code-mode-host from an explicit build context pointing to the installed release's bin directory. No `.codex`, `.env`, data or auth directory enters the context. apt toolchain packages remain repository-resolved.
 
-`tools/run-container.sh` runs rootless Podman with the host numeric identity, dropped capabilities and no-new-privileges. It publishes `127.0.0.1:8766`, uses app data in `codex-webui-2-data`, mounts existing Codex state at `/codex`, preserves the selected workspace's host absolute path inside the container, and mounts one Jev key file read-only when present. It does not inspect credentials, expose the Podman socket, replace an existing named container, or open a visible browser window. Use `--detach` for background launch and `podman stop codex-webui-2` to stop it; foreground launch stops with Ctrl-C. The container is removed and data retained. Runtime builds use Docker image format to preserve the HTTP health check.
+`tools/run-container.sh` runs rootless Podman with the host numeric identity, dropped capabilities and no-new-privileges. It publishes `127.0.0.1:8766`, uses app data in `codex-webui-2-data`, mounts existing Codex state at `/codex`, preserves the selected workspace's host absolute path inside the container, and mounts one Jev key file read-only when present. It passes the canonical host Jev and Codex-state paths through `CODEX_WEBUI_JEV_KEY_SOURCE_FILE` and `CODEX_WEBUI_CODEX_STATE_SOURCE_DIR` so workspace browser routes cannot expose their original mounts. It does not inspect credentials, expose the Podman socket, replace an existing named container, or open a visible browser window. Use `--detach` for background launch and `podman stop codex-webui-2` to stop it; foreground launch stops with Ctrl-C. The container is removed and data retained. Runtime builds use Docker image format to preserve the HTTP health check.
 
 Optional `tools/run-local.sh` serves the same built frontend on loopback using a project-local Python environment. The container launcher is primary. Schema generation and capability probes are read-only; live task/approval smoke remains explicit opt-in.
+
+Private remote access is opt-in with `tools/run-container.sh --detach --tailscale`. The launcher requires a running Tailscale connection, obtains its canonical `.ts.net` DNS name, and adds exactly that Host and HTTPS origin alongside localhost. It does not configure Tailscale or broaden the container's loopback bind. On the host, `tailscale serve --bg --yes --https=443 http://127.0.0.1:8766` configures private HTTPS reverse proxying; administrator access may be required. Serve owns TCP 443 on the tailnet, supports browser WebSockets, and persists until `tailscale serve --https=443 off`. No Funnel, LAN listener, router forwarding, or public domain is used. The container still requires a running launcher; automatic startup is not configured.
 
 Generated distribution files are temporary current candidates. Retain the user-requested local image, not archives or accumulated older builds. No registry publication is requested or configured.
 
 Source hosting uses the project’s public origin. Authentication and any additional remotes belong in local Git configuration, outside committed project documentation.
 
+Both image builds explicitly mark final images `io.rareskey.retention=retain`, intermediate build images `ephemeral`, and project ownership `codex-webui-2`. The build flow holds a shared workstation build-retention flock so periodic cleanup cannot race these builds.
+
 ## Gaps
 
 - amd64 image/runtime is the current target; no ARM64 image/runtime evidence yet.
 - apt packages are not snapshot-pinned, and the selected standalone binary is local rather than automatically fetched.
-- No remote authentication, registry release process or versioned data migration is included.
+- No application-specific remote authentication, registry release process or versioned data migration is included; private access relies on Tailscale network admission and its access controls.

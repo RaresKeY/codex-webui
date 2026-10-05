@@ -1,0 +1,44 @@
+{
+  "syntheticFixtures": true,
+  "desktop": {
+    "sidebar": 260,
+    "mainX": 260,
+    "composerWidth": 760,
+    "composerBottom": 955.5,
+    "overflow": false,
+    "font": "16px",
+    "commandsOpen": false,
+    "thoughtOpen": false
+  },
+  "phone": {
+    "width": 390,
+    "height": 844
+  },
+  "checks": [
+    "geometry",
+    "collapsed activity",
+    "context panel",
+    "single backend send",
+    "exact padded input",
+    "failed draft retained",
+    "phone no overflow",
+    "exclusive navigation",
+    "new chat",
+    "secondary page access"
+  ],
+  "featureChecks": [
+    "shell before slow history",
+    "@ plugin keyboard selection and native metadata",
+    "deleted plugin mention does not reactivate implicitly",
+    "draft edited during send",
+    "pending send and draft survive secondary pages",
+    "stale searches cannot replace current results",
+    "relative Markdown images resolve in the project",
+    "inline images decoded and modal Escape/focus",
+    "one turn spinner, no bottom plate",
+    "last context total and hover limit",
+    "explicit startup error and history retry",
+    "phone plugin menu without overflow"
+  ],
+  "uncaughtErrors": 0
+}

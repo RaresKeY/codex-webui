@@ -1,8 +1,8 @@
 # Codex WebUI 2
 
-A local Codex chat app with a quieter ChatGPT-style interface, succeeding WebUI 1 in [RaresKeY/codex-webui](https://github.com/RaresKeY/codex-webui). It retains native thread history, approvals, workspace tools, projects, schedules, images, and the experimental voice adapter. WebUI 1's tracked source and complete Git history are archived externally; its local checkout remains available as an archival reference.
+A local Codex chat app with a quieter ChatGPT-style interface, succeeding WebUI 1 in [RaresKeY/codex-webui](https://github.com/RaresKeY/codex-webui). It supports chat archive/restore and confirmed permanent deletion, plus project deletion that preserves chats and files. It retains native thread history, approvals, workspace tools, projects, schedules, images, and the experimental voice adapter. WebUI 1's tracked source and complete Git history are archived externally; its local checkout remains available as an archival reference.
 
-One sidebar, readable conversations, user message bubbles, a compact composer, and optional workspace tools keep chat central. Command output and public thought summaries expand on demand. Desktop navigation collapses; phone navigation and context use exclusive drawers. The shell opens while history loads, `@` offers installed plugins, images preview inline with click-to-zoom, and one activity indicator covers the message lifecycle. Hover the context ring for exact used/total/remaining token counts; unknown limits stay unavailable.
+A narrow utility rail and compact chat sidebar, readable conversations, user message bubbles, a compact composer, and optional workspace tools keep chat central. Command output and public thought summaries expand on demand. Desktop navigation collapses; phone navigation and context use exclusive drawers. The shell opens while history loads, `@` offers installed plugins, images preview inline with click-to-zoom and appear in the gallery from up to 100 loaded recent chats, and one activity indicator covers the message lifecycle. Hover the context ring for exact used/total/remaining token counts; unknown limits stay unavailable.
 
 The browser submits each text message once to the backend. After checking that the conversation is available, the backend enforces this order:
 
@@ -24,6 +24,8 @@ The built image is `localhost/codex-webui-2:local`:
 ```
 
 Open **http://127.0.0.1:8766**. The launcher runs rootless Podman, publishes loopback only, mounts the workspace at its identical absolute path, mounts existing Codex state externally, and uses the separate `codex-webui-2-data` volume. It does not open a browser window.
+
+For private Tailscale access, launch with `tools/run-container.sh --detach --tailscale`, then configure the host proxy with `tailscale serve --bg --yes --https=443 http://127.0.0.1:8766` (use `sudo` if Tailscale requires administrator access). The app allows the connected workstation's canonical `.ts.net` hostname and HTTPS origin. Open `https://<workstation-name>.<tailnet-name>.ts.net` from a device connected to your tailnet. Tailscale network access controls determine who can reach the app; everyone with access receives the signed-in Codex user's workspace authority. The container stays on loopback. Serve persists until disabled with `tailscale serve --https=443 off`; the app must also be running. See [deployment operations](specs/deployment_operations.md) for the current workstation URL and verification.
 
 `CODEX_WEBUI_WORKSPACE_ROOT`, `CODEX_WEBUI_CODEX_STATE`, `CODEX_WEBUI_JEV_KEY_FILE`, `CODEX_WEBUI_PORT`, and `CODEX_WEBUI_IMAGE` override defaults. The default external Jev key file is `../jev-pipelines/.env`; its `JEV_API` or `TYPESAFE_API_KEY` value is read as data. Credentials never enter image layers or frontend JavaScript. The container has its own Python, Bash, Git and ripgrep toolchain; only mounted paths are available to Codex.
 
@@ -52,3 +54,7 @@ Project memory: [specs](specs/_readme.md), [desired design](design/_readme.md), 
 - Real paid Jev → Codex task execution and microphone audio have not been smoke-tested in this project. Tests use transport fixtures; capability discovery is read-only.
 - The local image embeds the workstation's standalone Codex binary. ARM64 builds require the matching ARM64 standalone release and separate runtime verification.
 - Inherited scheduled tasks and voice sessions retain their existing execution flow; automatic Jev routing applies to submitted text chat messages.
+
+New chat opens a launch page: submit independent prompts without leaving it, then open any of the last ten chats. Spinners show active work and blue dots mark finished unread replies. See [launch behavior](specs/new_chat_launch.md).
+
+Projects now open a scoped quick composer and recent chats. New chat supports No project; creation offers optional workspace details and folder colors. Bottom controls show the recorded last-turn model/effort. See [project launch](specs/project_launch.md).

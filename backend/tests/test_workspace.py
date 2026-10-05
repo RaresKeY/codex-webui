@@ -41,3 +41,27 @@ def test_tree_does_not_follow_symlink_outside_root(workspace_root: Path, tmp_pat
     assert "children" not in escape
     with pytest.raises(UnsafePath):
         Workspace(workspace_root, 1024).read("escape/secret.txt")
+
+
+def test_protected_paths_and_symlink_aliases_are_not_browser_files(workspace_root: Path) -> None:
+    state = workspace_root / ".codex"
+    state.mkdir()
+    (state / "auth.json").write_text('{"fixture": true}')
+    key = workspace_root / ".env"
+    key.write_text("JEV_API=synthetic-fixture")
+    (workspace_root / "key-alias").symlink_to(key)
+    workspace = Workspace(workspace_root, 1024, (state, key))
+    assert workspace.tree(".")["children"] == []
+    for relative in (".env", "key-alias", ".codex/auth.json", ".codex/new.json"):
+        with pytest.raises(UnsafePath, match="Credential"):
+            workspace.read(relative)
+        with pytest.raises(UnsafePath, match="Credential"):
+            workspace.write(relative, "replacement")
+    assert key.read_text() == "JEV_API=synthetic-fixture"
+    assert not (state / "new.json").exists()
+
+
+def test_protected_tree_still_shows_cyclic_links_as_opaque(workspace_root: Path) -> None:
+    (workspace_root / "loop").symlink_to(workspace_root / "loop")
+    workspace = Workspace(workspace_root, 1024, (workspace_root / ".env",))
+    assert workspace.tree(".")["children"] == [{"name": "loop", "path": "loop", "type": "symlink"}]

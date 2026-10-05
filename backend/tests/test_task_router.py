@@ -106,3 +106,22 @@ def test_offline_codex_does_not_spend_a_routing_call(client):
     client.app.state.router.choose = AsyncMock()
     assert client.post("/api/threads/thread-1/route", json={"input": "Fix layout"}).status_code == 503
     client.app.state.router.choose.assert_not_called()
+
+
+def test_webui_learning_preference_is_sent_to_jev_and_versioned():
+    request = routing_request("Teach me how TCP works")
+    policy = request["state"]["routing_policy"]
+    assert policy["version"] == "2026-10-06-webui2-v7"
+    assert "generally gives lower-quality responses" in policy["model"]
+    assert "asks how something functions" in policy["model"]
+    assert "learning" in request["questions"]["execution_model"]["criteria"]["gpt-6.1-sol"]
+    assert parse_route(response())["policy"] == policy["version"]
+    assert parse_route(response(), "request-policy-version")["policy"] == "request-policy-version"
+
+def test_greetings_are_explicitly_luna_low_and_projects_do_not_inflate_them():
+    payload = routing_request("  hello  ")
+    assert payload["state"]["task"] == "  hello  "
+    assert set(payload["state"]) == {"task", "routing_policy"}
+    policy = payload["state"]["routing_policy"]
+    assert ["Hello / hi / hey (with or without a selected project)", "gpt-6-luna:low"] in policy["anchors"]
+    assert "selected project does not make a greeting bespoke work" in payload["questions"]["execution_model"]["criteria"]["gpt-6-luna"].lower()

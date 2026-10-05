@@ -4,8 +4,10 @@ import asyncio
 import contextlib
 import json
 import mimetypes
+import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import uuid
@@ -27,6 +29,8 @@ from .database import Database
 from .models import (
     ApprovalResponse,
     ChatMetadataUpdate,
+    ChatPermissions,
+    ChatExecution,
     FileWrite,
     ProjectCreate,
     ProjectUpdate,
@@ -46,6 +50,7 @@ from .updater import Updater
 from .workspace import UnsafePath, Workspace
 from .task_router import RoutingError, TaskRouter
 from .plugins import PluginCatalog, PluginError
+from .mentions import MentionCatalog
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
@@ -57,14 +62,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         experimental_api=settings.experimental_api,
         request_timeout=settings.codex_request_timeout_seconds,
     )
-    workspace = Workspace(settings.workspace_root, settings.max_file_bytes)
+    protected_paths = tuple(path for path in (
+        settings.jev_key_file, settings.jev_key_source_file, settings.codex_state_source_dir,
+        Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex"),
+    ) if path is not None)
+    workspace = Workspace(settings.workspace_root, settings.max_file_bytes, protected_paths)
     scheduler = TaskScheduler(
         db, codex, workspace, settings.approval_policy, settings.sandbox
     )
     updater = Updater(settings.update_command, settings.workspace_root)
     router = TaskRouter(settings.jev_key_file)
     plugins = PluginCatalog(codex, workspace)
-    chat = RoutedChat(codex, router, settings, plugins)
+    mentions = MentionCatalog(codex, workspace, plugins)
+    chat = RoutedChat(codex, router, settings, plugins, mentions, db)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -88,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.router = router
     app.state.chat = chat
     app.state.plugins = plugins
+    app.state.mentions = mentions
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
@@ -248,6 +259,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except PluginError as exc:
             raise HTTPException(503, str(exc)) from None
 
+    @app.get("/api/mentions")
+    async def mention_catalog(cwd: str = ".", thread_id: str | None = None) -> dict[str, Any]:
+        try:
+            return await mentions.entries(cwd, thread_id)
+        except PluginError as exc:
+            raise HTTPException(503, str(exc)) from None
+
+    @app.get("/api/mention-files")
+    async def mention_files(cwd: str = ".", q: str = Query(default="", max_length=200)) -> dict[str, Any]:
+        try:
+            return {"data": await mentions.files(cwd, q)}
+        except PluginError as exc:
+            raise HTTPException(503, str(exc)) from None
+
     @app.get("/api/threads")
     async def list_threads(
         q: str | None = None,
@@ -271,11 +296,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response = result if isinstance(result, dict) else {"data": result or []}
         threads = response.get("data", response.get("threads", []))
         metadata = await db.all_chat_metadata()
+        selections = await db.latest_turn_selections([str(thread.get("id") or thread.get("threadId") or "") for thread in threads])
         enriched = []
         for thread in threads:
             item = dict(thread)
             thread_id = str(item.get("id") or item.get("threadId") or "")
-            item["webui"] = metadata.get(thread_id, {"pinned": 0, "project_id": None})
+            item["webui"] = {**metadata.get(thread_id, {"pinned": 0, "project_id": None}), **selections.get(thread_id, {})}
             haystack = " ".join(str(item.get(key, "")) for key in ("name", "title", "preview", "cwd"))
             if not q or q.casefold() in haystack.casefold():
                 enriched.append(item)
@@ -285,7 +311,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/threads/{thread_id}")
     async def read_thread(thread_id: str) -> Any:
         try:
-            return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": True})
+            result = await codex.request("thread/read", {"threadId": thread_id, "includeTurns": True})
         except CodexRPCError as exc:
             if unsupported_history(exc):
                 raise HTTPException(409, UNSUPPORTED_HISTORY_MESSAGE) from None
@@ -293,7 +319,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise
             # A public App Server thread has no rollout until its first user
             # message. Metadata remains readable, but includeTurns is invalid.
-            return await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
+            result = await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
+        try:
+            selections = await db.turn_selections(thread_id)
+        except sqlite3.Error:
+            selections = {}  # Optional labels must not hide native history.
+        if isinstance(result, dict) and isinstance(result.get("thread"), dict):
+            for turn in result["thread"].get("turns", []):
+                if isinstance(turn, dict) and turn.get("id") in selections:
+                    turn["webui"] = selections[turn["id"]]
+        return result
 
     @app.get("/api/threads/{thread_id}/background-terminals")
     async def background_terminals(thread_id: str) -> Any:
@@ -327,18 +362,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/threads", status_code=201)
     async def start_thread(body: ThreadStart) -> Any:
+        inherited = await db.get_setting("new-chat-permissions", "default")
+        if inherited not in {"default", "full-auto", "yolo"}:
+            raise HTTPException(409, "Choose valid permissions before creating a chat.")
         params: dict[str, Any] = {
             "cwd": str(workspace.resolve(body.cwd or ".", must_exist=True)),
-            "approvalPolicy": body.approval_policy or settings.approval_policy,
-            "sandbox": body.sandbox or settings.sandbox,
+            "approvalPolicy": body.approval_policy or ("never" if inherited == "yolo" else "on-request" if inherited == "full-auto" else settings.approval_policy),
+            "sandbox": body.sandbox or (settings.sandbox if inherited == "default" else "danger-full-access"),
             # The installed runtime selected paginated history but cannot resume it.
             "historyMode": "legacy",
         }
+        if inherited == "full-auto":
+            params["approvalsReviewer"] = "auto_review"
         if body.model:
             params["model"] = body.model
         if body.ephemeral:
             params["ephemeral"] = True
-        return await codex.request("thread/start", params)
+        result = await codex.request("thread/start", params)
+        thread_id = result.get("thread", {}).get("id") if isinstance(result, dict) else None
+        if not thread_id:
+            raise HTTPException(502, "Codex could not confirm the new chat.")
+        await db.set_setting("chat-permissions:" + thread_id, inherited)
+        return result
 
     @app.post("/api/threads/{thread_id}/route")
     async def route_message(thread_id: str, body: RouteRequest) -> Any:
@@ -373,9 +418,58 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def name_thread(thread_id: str, body: ThreadName) -> Any:
         return await codex.request("thread/name/set", {"threadId": thread_id, "name": body.name})
 
+    @app.get("/api/threads/{thread_id}/permissions")
+    async def get_chat_permissions(thread_id: str) -> dict[str, Any]:
+        return {"mode": await chat.permission_mode(thread_id)}
+
+    @app.patch("/api/threads/{thread_id}/permissions")
+    async def set_chat_permissions(thread_id: str, body: ChatPermissions) -> dict[str, Any]:
+        await chat.set_permissions(thread_id, body.mode)
+        return {"mode": body.mode, "acknowledged": True}
+
+    @app.get("/api/threads/{thread_id}/execution")
+    async def get_chat_execution(thread_id: str) -> dict[str, Any]:
+        return (await chat.execution(thread_id)).model_dump()
+
+    @app.patch("/api/threads/{thread_id}/execution")
+    async def set_chat_execution(thread_id: str, body: ChatExecution) -> dict[str, Any]:
+        await chat.set_execution(thread_id, body)
+        return {**body.model_dump(), "acknowledged": True}
+
+    async def mutate_thread_lifecycle(thread_id: str, method: str) -> Any:
+        async with chat.reserve(thread_id):
+            metadata = await codex.request("thread/read", {"threadId": thread_id, "includeTurns": False})
+            thread = metadata.get("thread", {}) if isinstance(metadata, dict) else {}
+            if not isinstance(thread, dict) or thread.get("id") != thread_id:
+                raise MessageError(502, "Codex could not confirm this chat. No lifecycle change was requested.")
+            status = thread.get("status")
+            if status == "active" or isinstance(status, dict) and status.get("type") == "active":
+                raise MessageError(409, "Wait for this chat's current turn to finish first.")
+            result = await codex.request(method, {"threadId": thread_id})
+            if method in {"thread/archive", "thread/delete"} and result != {}:
+                raise MessageError(502, "Codex could not confirm the change. Refresh the chat list before trying again.")
+            if method == "thread/unarchive":
+                restored = result.get("thread", {}) if isinstance(result, dict) else {}
+                if not isinstance(restored, dict) or restored.get("id") != thread_id:
+                    raise MessageError(502, "Codex could not confirm restoration. Refresh before trying again.")
+                metadata = await db.all_chat_metadata()
+                selections = await db.latest_turn_selections([thread_id])
+                restored["webui"] = {**metadata.get(thread_id, {"pinned": 0, "project_id": None}), **selections.get(thread_id, {})}
+            if method == "thread/delete":
+                await db.delete_chat_state(thread_id)
+            return result
+
     @app.post("/api/threads/{thread_id}/archive")
     async def archive_thread(thread_id: str) -> Any:
-        return await codex.request("thread/archive", {"threadId": thread_id})
+        return await mutate_thread_lifecycle(thread_id, "thread/archive")
+
+    @app.post("/api/threads/{thread_id}/unarchive")
+    async def unarchive_thread(thread_id: str) -> Any:
+        return await mutate_thread_lifecycle(thread_id, "thread/unarchive")
+
+    @app.delete("/api/threads/{thread_id}", status_code=204)
+    async def delete_thread(thread_id: str) -> None:
+        await mutate_thread_lifecycle(thread_id, "thread/delete")
 
     @app.post("/api/threads/{thread_id}/fork", status_code=201)
     async def fork_thread(thread_id: str) -> Any:
@@ -486,6 +580,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return {"stopped": False, "reason": "unsupported"}
             raise
 
+    async def stream_native_events(websocket: WebSocket, thread_id: str | None = None, activity_only: bool = False) -> None:
+        async def forward_events():
+            async with codex.subscribe() as queue:
+                while True:
+                    message = await queue.get()
+                    if activity_only and message.get("method") not in {"turn/started", "turn/completed", "error", "thread/name/updated", "thread/archived", "thread/deleted", "thread/unarchived"}:
+                        continue
+                    if thread_id is None or event_is_for_thread(message, thread_id):
+                        await websocket.send_json(message)
+
+        async def receive_disconnect():
+            while True:
+                if (await websocket.receive())["type"] == "websocket.disconnect":
+                    return
+
+        tasks = [asyncio.create_task(forward_events()), asyncio.create_task(receive_disconnect())]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    @app.websocket("/api/activity")
     @app.websocket("/api/events")
     async def events(websocket: WebSocket) -> None:
         if not websocket_origin_is_allowed(websocket, settings.allowed_origins):
@@ -496,9 +614,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await websocket.send_json(
                 {"method": "webui/status", "params": {"codexAvailable": codex.available, "error": codex.last_error}}
             )
-            async with codex.subscribe() as queue:
-                while True:
-                    await websocket.send_json(await queue.get())
+            await stream_native_events(websocket, activity_only=websocket.url.path.endswith("/activity"))
         except (WebSocketDisconnect, RuntimeError):
             return
 
@@ -807,9 +923,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def name_conversation_alias(thread_id: str, body: ThreadName) -> Any:
         return await name_thread(thread_id, body)
 
-    @app.delete("/api/conversations/{thread_id}", include_in_schema=False)
-    async def archive_conversation_alias(thread_id: str) -> Any:
-        return await archive_thread(thread_id)
+    @app.delete("/api/conversations/{thread_id}", status_code=204, include_in_schema=False)
+    async def delete_conversation_alias(thread_id: str) -> None:
+        await delete_thread(thread_id)
 
     @app.post("/api/conversations/{thread_id}/fork", status_code=201, include_in_schema=False)
     async def fork_conversation_alias(thread_id: str) -> Any:
@@ -843,25 +959,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await websocket.send_json(
                 {"method": "webui/status", "params": {"codexAvailable": codex.available, "threadId": thread_id}}
             )
-            async def forward_events():
-                async with codex.subscribe() as queue:
-                    while True:
-                        message = await queue.get()
-                        if event_is_for_thread(message, thread_id):
-                            await websocket.send_json(message)
-
-            async def receive_disconnect():
-                while True:
-                    if (await websocket.receive())["type"] == "websocket.disconnect":
-                        return
-
-            tasks = [asyncio.create_task(forward_events()), asyncio.create_task(receive_disconnect())]
-            try:
-                await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            finally:
-                for task in tasks:
-                    task.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
+            await stream_native_events(websocket, thread_id)
         except (WebSocketDisconnect, RuntimeError):
             return
 

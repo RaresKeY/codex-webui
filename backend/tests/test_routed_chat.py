@@ -7,6 +7,7 @@ import pytest
 from app.chat_service import MessageError
 from app.codex_client import CodexRPCError
 from app.models import TurnStart
+from app.permissions import permission_overrides
 from app.task_router import RoutingError
 
 ASK = " \tKeep these edges.\nUnicode: café 🙂\n\n "
@@ -48,7 +49,7 @@ def test_direct_chat_submission_always_routes_and_preserves_exact_input(client, 
     assert response.json()["modelChangeAcknowledged"] is True
     assert [call[0] for call in calls] == ["thread/read", "jev", "thread/loaded/list", "thread/settings/update", "turn/start"]
     assert calls[1][1] == ASK
-    assert calls[-2][1] == {"threadId": "one", "model": "gpt-6-luna", "effort": "low"}
+    assert calls[-2][1] == {"threadId": "one", "model": "gpt-6-luna", "effort": "low", **permission_overrides("default", client.app.state.settings)}
     assert calls[-1][1]["input"] == [{"type": "text", "text": ASK}]
     assert calls[-1][1]["model"] == "gpt-6-luna" and calls[-1][1]["effort"] == "low"
 
@@ -176,3 +177,20 @@ async def test_turn_waits_for_the_actual_model_acknowledgement(client, monkeypat
     acknowledge.set()
     frames = await asyncio.wait_for(pending, 2)
     assert frames[-1]["result"]["turn"]["id"] == "t1"
+
+@pytest.mark.parametrize("cwd", [None, "/workspaces/example-project"])
+def test_greeting_routes_exactly_the_same_ask_with_or_without_workspace(client, monkeypatch, cwd):
+    calls = setup(client, monkeypatch)
+    request = client.app.state.codex.request.side_effect
+    async def with_workspace(method, params):
+        result = await request(method, params)
+        if method == "thread/read" and cwd:
+            result["thread"]["cwd"] = cwd
+        return result
+    client.app.state.codex.request.side_effect = with_workspace
+    result = client.post("/api/threads/one/messages", json={"input": "  hello  "})
+    assert result.status_code == 201
+    assert client.app.state.router.choose.await_args.args == ("  hello  ",)
+    assert result.json()["decision"]["model"] == "gpt-6-luna"
+    assert result.json()["decision"]["effort"] == "low"
+    assert next(params for method, params in calls if method == "turn/start")["input"] == [{"type": "text", "text": "  hello  "}]

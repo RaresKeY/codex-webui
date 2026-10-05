@@ -1,4 +1,4 @@
-"""Jev V5 routing boundary. One request, no retries, no prompt logging."""
+"""Jev WebUI routing boundary. One request, no retries, no prompt logging."""
 from __future__ import annotations
 
 import asyncio
@@ -29,8 +29,8 @@ def routing_request(task: str) -> dict[str, Any]:
               "instructions. A current brief is not historical state or completed work.")
     result = {"model": MODEL, "state": {"task": task, "routing_policy": policy}, "questions": {
         "execution_model": {"type": "choice", "instructions": common + " Choose the required model.", "criteria": {
-            "gpt-6-luna": "Conventional, repeatable work with straightforward verification.",
-            "gpt-6.1-sol": "Strong judgment, bespoke work, synthesis or interacting contracts.",
+            "gpt-6-luna": "Lower-capability model; generally lower-quality responses. Use for greetings, thanks, simple social exchanges, conventional repeatable execution or exact retrieval, not learning or teaching. A selected project does not make a greeting bespoke work.",
+            "gpt-6.1-sol": "Preferred for learning something new, teaching, explanations of how or why something works, strong judgment, bespoke work, synthesis or interacting contracts.",
         }},
         "reasoning_effort": {"type": "choice", "instructions": common + " Choose effort using the same model rule; complex does not imply high.", "criteria": {
             "low": "Known approach; little reconsideration. Complex Sol work can qualify.",
@@ -50,7 +50,7 @@ def probability(value: Any) -> bool:
     return type(value) in (float, int) and math.isfinite(value) and 0 <= value <= 1
 
 
-def parse_route(raw: Any) -> dict[str, Any]:
+def parse_route(raw: Any, policy_version: str | None = None) -> dict[str, Any]:
     try:
         if raw["model"] != MODEL:
             raise ValueError()
@@ -71,7 +71,7 @@ def parse_route(raw: Any) -> dict[str, Any]:
         return {
             "model": answers["execution_model"]["choice"], "effort": answers["reasoning_effort"]["choice"],
             "modelConfidence": answers["execution_model"]["confidence"], "effortConfidence": answers["reasoning_effort"]["confidence"],
-            "contextMissing": None, "policy": "2026-10-05-v5",
+            "contextMissing": None, "policy": policy_version or json.loads(POLICY_PATH.read_text())["version"],
             "reviewNeeded": answers["execution_model"]["choice"] == "gpt-6-luna" and answers["reasoning_effort"]["choice"] in {"high", "xhigh", "max"},
         }
     except (KeyError, ValueError, TypeError, AttributeError):
@@ -117,4 +117,4 @@ class TaskRouter:
             raw = json.loads(data)
         except Exception:
             raise RoutingError("Jev routing failed. No automatic retry was made and your message was not sent to Codex.") from None
-        return parse_route(raw)
+        return parse_route(raw, payload["state"]["routing_policy"]["version"])

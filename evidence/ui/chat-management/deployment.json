@@ -1,0 +1,11 @@
+{
+  "health": "ok",
+  "codexAvailable": true,
+  "privateHttpsVerified": true,
+  "testedAssetsMatch": true,
+  "assets": [
+    "/assets/index-DoRnLbDy.js",
+    "/assets/index-CyD392Xn.css"
+  ],
+  "runtimeImage": "279d1d2264e31ac2aab217984a59f7545e1fbfdf15fb8089e7b15f6b21954247"
+}

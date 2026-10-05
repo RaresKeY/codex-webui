@@ -40,8 +40,8 @@ const components: Components = {
   img: ({ src, alt }) => typeof src === 'string' && src ? <InlineImages images={[{ url: src, alt: alt || 'Image' }]} /> : <span>Image unavailable</span>,
 }
 
-export function MarkdownContent({ source, compact = false }: { source: string; compact?: boolean }) {
+export function MarkdownContent({ source, compact = false, cwd }: { source: string; compact?: boolean; cwd?: string }) {
   return <div className={`markdown-content ${compact ? 'compact' : ''}`}>
-    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url, key) => key === 'src' ? imageSource(url) ?? '' : defaultUrlTransform(url)}>{source}</ReactMarkdown>
+    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url, key) => key === 'src' ? imageSource(url, cwd) ?? '' : defaultUrlTransform(url)}>{source}</ReactMarkdown>
   </div>
 }

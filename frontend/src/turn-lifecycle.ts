@@ -98,13 +98,13 @@ export function mergeStreamEvent(current: StreamEvent[], incoming: StreamEvent):
   return next
 }
 
-export function stampAssistantMessageModel(events: StreamEvent[], model: string): StreamEvent[] {
+export function stampAssistantMessageModel(events: StreamEvent[], model: string, effort?: string): StreamEvent[] {
   if (!model) return events
   let changed = false
   const stamped = events.map(event => {
-    if (event.kind !== 'message' || event.role === 'user' || typeof event.meta?.model === 'string') return event
+    if (!['message', 'image'].includes(event.kind) || event.role === 'user' || typeof event.meta?.model === 'string') return event
     changed = true
-    return { ...event, meta: { ...event.meta, model } }
+    return { ...event, meta: { ...event.meta, model, ...(effort ? { effort } : {}) } }
   })
   return changed ? stamped : events
 }

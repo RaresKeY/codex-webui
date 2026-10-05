@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .config import normalize_approval_policy, normalize_sandbox
+from .permissions import PermissionMode
 
 
 def utc_now() -> str:
@@ -36,6 +37,17 @@ class ThreadResume(BaseModel):
     model: str | None = None
 
 
+class ChatPermissions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: PermissionMode
+
+
+class ChatExecution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model: Literal["auto", "gpt-6.1-sol", "gpt-6-luna"] = "auto"
+    effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+
+
 class RouteRequest(BaseModel):
     input: str = Field(min_length=1, max_length=24_000)
 
@@ -50,13 +62,22 @@ class TurnStart(BaseModel):
     approval_policy: str | None = None
     sandbox: str | None = None
     plugins: list[str] = Field(default_factory=list, max_length=8)
+    mentions: list[str] = Field(default_factory=list, max_length=8)
 
-    @field_validator("plugins")
+    @field_validator("plugins", "mentions")
     @classmethod
     def validate_plugins(cls, value: list[str]) -> list[str]:
         if len(set(value)) != len(value) or any(not item or len(item) > 256 for item in value):
-            raise ValueError("plugins must contain unique bounded identifiers")
+            raise ValueError("selections must contain unique bounded identifiers")
         return value
+
+    @model_validator(mode="after")
+    def limit_selections(self):
+        if len(self.plugins) + len(self.mentions) > 8:
+            raise ValueError("At most eight mentions can be selected")
+        if any("plugin:" + plugin in self.mentions for plugin in self.plugins):
+            raise ValueError("Duplicate plugin selection")
+        return self
 
     @field_validator("input")
     @classmethod

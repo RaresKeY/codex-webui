@@ -19,7 +19,7 @@ describe('composer plugin mentions', () => {
   })
   it('only submits explicitly selected plugins still mentioned in the exact draft', () => {
     expect(mentionedPluginIds('  @my.notes find this\n ', plugins, ['my.notes@local'])).toEqual(['my.notes@local'])
-    for (const value of ['deleted', 'person@my.notes', '@myXnotes', '@my.notes-extra']) {
+    for (const value of ['deleted', 'person@my.notes', '@myXnotes', '@my.notes-extra', 'é@my.notes', '@my.notesé', '@my.notes_']) {
       expect(mentionedPluginIds(value, plugins, ['my.notes@local'])).toEqual([])
     }
     expect(mentionedPluginIds('@my.notes', plugins, [])).toEqual([])

@@ -4,6 +4,8 @@ The right panel should orient without competing with chat, so it starts collapse
 
 Later work may add search, Git diffs/staging, conflict-aware editing, uploads, and drag-to-attach. Mutations must be visibly workspace-scoped, conflict-aware, and reversible or confirmed. External symlinks, hidden/ignored trees, large files, and unsafe types receive explicit blocked states.
 
+The requested navigation direction is a ChatGPT app style sidebar adapted to the Codex companion: quiet dark surfaces, icon/text destinations, project rows, title-only chats and bottom-anchored profile settings. Existing Codex features determine available destinations; implemented navigation is documented in `specs/sidebar_navigation.md`.
+
 ## Gaps
 
 - Decide advanced edit scope and whether a heavy editor is justified on the Pi beyond the current textarea.

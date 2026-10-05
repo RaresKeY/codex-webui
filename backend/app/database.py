@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS chat_metadata (
   pinned INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS turn_selections (
+  thread_id TEXT NOT NULL,
+  turn_id TEXT NOT NULL,
+  model TEXT NOT NULL,
+  effort TEXT NOT NULL,
+  PRIMARY KEY(thread_id, turn_id)
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL,
@@ -98,8 +105,39 @@ class Database:
         finally:
             await db.close()
 
+    async def delete_chat_state(self, thread_id: str) -> None:
+        db = await self.connect()
+        try:
+            await db.execute("DELETE FROM chat_metadata WHERE thread_id=?", (thread_id,))
+            await db.execute("DELETE FROM turn_selections WHERE thread_id=?", (thread_id,))
+            await db.execute("DELETE FROM settings WHERE key IN (?,?)", ("chat-permissions:" + thread_id, "chat-execution:" + thread_id))
+            await db.commit()
+        finally:
+            await db.close()
+
     async def projects(self) -> list[dict[str, Any]]:
         return await self.fetchall("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
+
+    async def record_turn_selection(self, thread_id: str, turn_id: str, model: str, effort: str) -> None:
+        await self.execute(
+            "INSERT OR REPLACE INTO turn_selections(thread_id,turn_id,model,effort) VALUES(?,?,?,?)",
+            (thread_id, turn_id, model, effort),
+        )
+
+    async def latest_turn_selections(self, thread_ids: list[str]) -> dict[str, dict[str, str]]:
+        if not thread_ids:
+            return {}
+        placeholders = ",".join("?" for _ in thread_ids)
+        rows = await self.fetchall(
+            "SELECT thread_id,model,effort FROM turn_selections WHERE rowid IN "
+            f"(SELECT MAX(rowid) FROM turn_selections WHERE thread_id IN ({placeholders}) GROUP BY thread_id)",
+            tuple(thread_ids),
+        )
+        return {row["thread_id"]: {"last_turn_model": row["model"], "last_turn_effort": row["effort"]} for row in rows}
+
+    async def turn_selections(self, thread_id: str) -> dict[str, dict[str, str]]:
+        rows = await self.fetchall("SELECT turn_id,model,effort FROM turn_selections WHERE thread_id=?", (thread_id,))
+        return {row["turn_id"]: {"model": row["model"], "effort": row["effort"]} for row in rows}
 
     async def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
         now = utc_now()
@@ -148,12 +186,28 @@ class Database:
         rows = await self.fetchall("SELECT key,value_json FROM settings")
         return {row["key"]: json.loads(row["value_json"]) for row in rows}
 
+    async def get_setting(self, key: str, default: Any = None) -> Any:
+        row = await self.fetchone("SELECT value_json FROM settings WHERE key=?", (key,))
+        return json.loads(row["value_json"]) if row else default
+
     async def set_setting(self, key: str, value: Any) -> None:
         await self.execute(
             """INSERT INTO settings(key,value_json,updated_at) VALUES(?,?,?)
                ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at""",
             (key, json.dumps(value), utc_now()),
         )
+
+    async def set_settings(self, values: dict[str, Any]) -> None:
+        db = await self.connect()
+        try:
+            await db.executemany(
+                "INSERT INTO settings(key,value_json,updated_at) VALUES(?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
+                [(key, json.dumps(value), utc_now()) for key, value in values.items()],
+            )
+            await db.commit()
+        finally:
+            await db.close()
 
     async def tasks(self) -> list[dict[str, Any]]:
         return await self.fetchall("SELECT * FROM scheduled_tasks ORDER BY id DESC")

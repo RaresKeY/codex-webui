@@ -1,0 +1,26 @@
+{
+  "syntheticFixtures": true,
+  "checks": [
+    "default prompt landing with last 10",
+    "no eager chat creation",
+    "two independent submissions without navigation",
+    "exact Unicode and padded prompts",
+    "running spinners",
+    "unread completion dots",
+    "reload preserves unread IDs",
+    "opening chat clears dot",
+    "new chat does not create a thread",
+    "failed prompt restoration without retry",
+    "failed recovery outside recent ten",
+    "external history discovery",
+    "duplicate completion remains read",
+    "completion before HTTP acknowledgement stays complete",
+    "phone/narrow/landscape no overflow",
+    "normal chat no project",
+    "project scoped quick composer",
+    "project greeting exact ask and recorded model",
+    "project creation colors/failure/double-submit/selection",
+    "project dialog focus and Escape"
+  ],
+  "uncaughtJavaScriptErrors": 0
+}

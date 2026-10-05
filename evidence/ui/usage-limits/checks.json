@@ -1,0 +1,30 @@
+{
+  "syntheticFixtures": true,
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "320x640",
+    "854x480"
+  ],
+  "chats": 45,
+  "projects": 7,
+  "checks": [
+    "matched baseline",
+    "single-line titles",
+    "project expand/show more/filter/reset",
+    "chat order and details",
+    "persistent pin/unpin UI",
+    "workspace files shortcut",
+    "remote search, empty and error states",
+    "search focus and Ctrl+K",
+    "secondary navigation",
+    "mobile focus trap and Escape return",
+    "inert background",
+    "touch selection closes drawer",
+    "dense-list scrolling with fixed profile",
+    "new project opens existing creation dialog",
+    "history failure and retry",
+    "empty workspace and new chat"
+  ],
+  "uncaughtJavaScriptErrors": 0
+}
