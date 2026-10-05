@@ -18,6 +18,8 @@ Implemented upstream usage/context subset and redacted local diagnostics.
 
 The Settings usage card abbreviates token totals using the existing thousands and millions rules and a billions unit for values at or above one billion. Both lifetime and peak-daily totals share the same formatter. The visual abbreviation is paired with the exact, grouped token count for hover disclosure and assistive technology; unavailable values remain labeled `Unavailable`.
 
+The conversation context ring uses `tokenUsage.last.totalTokens`, not accumulated `total.totalTokens`. Hover/focus exposes used tokens, total `modelContextWindow` and remaining capacity. Unknown counts/limits are explicitly unavailable; changing model clears stale context. Current native thread reads do not restore these values, so a reopened chat waits for a token-usage notification. `frontend/src/context-usage.ts` owns validation and labels.
+
 ## Verification
 
 Frontend tests cover nested usage, missing-value handling, K/M/B formatting boundaries, and exact accessible token labels. Backend tests cover degraded bootstrap and protocol failure state. The live smoke prints only pass/fail milestones.

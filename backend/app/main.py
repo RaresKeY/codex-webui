@@ -21,7 +21,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import StreamingResponse
 
 from .chat_service import MessageError, RoutedChat, UNSUPPORTED_HISTORY_MESSAGE, unsupported_history
-from .codex_client import CodexAppServerClient, CodexRPCError, CodexUnavailable
+from .codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, CodexUnavailable
 from .config import Settings, load_settings
 from .database import Database
 from .models import (
@@ -45,6 +45,7 @@ from .scheduler import TaskScheduler
 from .updater import Updater
 from .workspace import UnsafePath, Workspace
 from .task_router import RoutingError, TaskRouter
+from .plugins import PluginCatalog, PluginError
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
@@ -54,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         enabled=settings.codex_enabled,
         line_limit=settings.max_protocol_line_bytes,
         experimental_api=settings.experimental_api,
+        request_timeout=settings.codex_request_timeout_seconds,
     )
     workspace = Workspace(settings.workspace_root, settings.max_file_bytes)
     scheduler = TaskScheduler(
@@ -61,7 +63,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     updater = Updater(settings.update_command, settings.workspace_root)
     router = TaskRouter(settings.jev_key_file)
-    chat = RoutedChat(codex, router, settings)
+    plugins = PluginCatalog(codex, workspace)
+    chat = RoutedChat(codex, router, settings, plugins)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -84,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.updater = updater
     app.state.router = router
     app.state.chat = chat
+    app.state.plugins = plugins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
@@ -128,6 +132,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def message_error(_: Request, exc: MessageError):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(CodexTimeout)
+    async def codex_timeout(_: Request, exc: CodexTimeout):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=504, content={"detail": "Codex took too long to respond. Check the current state before retrying."})
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -211,32 +220,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/bootstrap")
     async def bootstrap() -> dict[str, Any]:
-        """One round-trip for initial UI state, including degraded mode."""
-        threads, models_result, usage_result = await asyncio.gather(
-            list_threads(limit=25), models(), usage()
-        )
-        thread_entries = threads.get("data", []) if isinstance(threads, dict) else []
-        first_thread = thread_entries[0] if thread_entries and isinstance(thread_entries[0], dict) else {}
-        voice_capability = await realtime_capability_payload(str(first_thread.get("id"))) if first_thread.get("id") else await realtime_capability_payload()
+        """Local shell data only; upstream history and metadata load independently."""
         return {
             "health": await health(),
             "system": await system_status(),
             "projects": await db.projects(),
             "settings": await db.settings(),
             "tasks": await db.tasks(),
-            "threads": threads,
-            "models": models_result,
-            "usage": usage_result,
-            "workspace": workspace.tree(".", depth=1),
-            "images": await list_images(),
+            "threads": {"data": [], "nextCursor": None},
+            "models": {"data": []},
+            "usage": {"available": False, "rateLimits": None, "usage": None},
+            "workspace": [],
+            "images": [],
             "features": {
                 "projects": True, "schedules": True, "images": True,
                 "workspaceWrite": True, "updates": bool(settings.update_command),
-                "realtimeVoice": voice_capability["available"],
-                "realtimeVoiceReason": voice_capability.get("reason"),
+                "realtimeVoice": False,
+                "realtimeVoiceReason": "Checking realtime voice support…",
                 "hostCompanion": settings.runtime == "localhost-companion",
             },
         }
+
+    @app.get("/api/plugins")
+    async def installed_plugins(cwd: str = ".") -> dict[str, Any]:
+        try:
+            return {"data": await plugins.entries(cwd)}
+        except PluginError as exc:
+            raise HTTPException(503, str(exc)) from None
 
     @app.get("/api/threads")
     async def list_threads(
@@ -572,6 +582,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except (ValueError, IsADirectoryError, PermissionError) as exc:
             raise HTTPException(400, str(exc)) from None
 
+    @app.get("/api/workspace/image")
+    async def workspace_image(path: str):
+        from fastapi.responses import Response
+        try:
+            resolved = workspace.resolve(path, must_exist=True)
+            if not resolved.is_file():
+                raise HTTPException(400, "Image path must be a file")
+            def read_image():
+                with resolved.open("rb") as handle:
+                    return handle.read(settings.max_image_bytes + 1)
+            data = await asyncio.to_thread(read_image)
+            if len(data) > settings.max_image_bytes:
+                raise HTTPException(413, "Image exceeds preview limit")
+            _, mime = detect_image(data)
+            if not mime:
+                raise HTTPException(415, "Only PNG, JPEG, GIF, and WebP images can be previewed")
+            return Response(data, media_type=mime, headers={"Cache-Control": "no-store"})
+        except UnsafePath:
+            raise HTTPException(403, "Image path escapes the workspace") from None
+        except FileNotFoundError:
+            raise HTTPException(404, "Image not found") from None
+        except PermissionError:
+            raise HTTPException(403, "Image is not readable") from None
+
     @app.get("/api/workspace/changes")
     async def workspace_changes(path: str = ".") -> Any:
         try:
@@ -782,8 +816,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await fork_thread(thread_id)
 
     @app.post("/api/conversations/{thread_id}/turns", status_code=201, include_in_schema=False)
-    async def conversation_turn_alias(thread_id: str, body: TurnStart) -> Any:
-        return await start_turn(thread_id, body)
+    async def conversation_turn_alias(thread_id: str, body: TurnStart, request: Request) -> Any:
+        return await send_message(thread_id, body, request)
 
     @app.post(
         "/api/conversations/{thread_id}/turns/{turn_id}/interrupt", include_in_schema=False
@@ -809,11 +843,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await websocket.send_json(
                 {"method": "webui/status", "params": {"codexAvailable": codex.available, "threadId": thread_id}}
             )
-            async with codex.subscribe() as queue:
+            async def forward_events():
+                async with codex.subscribe() as queue:
+                    while True:
+                        message = await queue.get()
+                        if event_is_for_thread(message, thread_id):
+                            await websocket.send_json(message)
+
+            async def receive_disconnect():
                 while True:
-                    message = await queue.get()
-                    if event_is_for_thread(message, thread_id):
-                        await websocket.send_json(message)
+                    if (await websocket.receive())["type"] == "websocket.disconnect":
+                        return
+
+            tasks = [asyncio.create_task(forward_events()), asyncio.create_task(receive_disconnect())]
+            try:
+                await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
         except (WebSocketDisconnect, RuntimeError):
             return
 

@@ -27,4 +27,14 @@ describe('MarkdownContent', () => {
     expect(code).toContain('language-ts')
     expect(() => renderToStaticMarkup(<MarkdownContent source={'A **partial'} />)).not.toThrow()
   })
+
+  it('renders local image previews inside valid paragraph markup and rejects unsafe images', () => {
+    const html = renderToStaticMarkup(<MarkdownContent source={'![Preview](/workspace/a.png)'} />)
+    expect(html).toContain('<p><span class="inline-images">')
+    expect(html).toContain('/api/workspace/image?path=%2Fworkspace%2Fa.png')
+    expect(html).toContain('aria-label="View Preview"')
+    const unsafe = renderToStaticMarkup(<MarkdownContent source={'![bad](https://remote.invalid/a.png)'} />)
+    expect(unsafe).toContain('Image unavailable')
+    expect(unsafe).not.toContain('src="https:')
+  })
 })

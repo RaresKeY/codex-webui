@@ -1,19 +1,22 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from 'react'
 import {
   Activity, AlertCircle, ArrowUp, Bot, Box, CalendarClock, Check, ChevronDown,
   ChevronRight, Circle, Clock3, Code2, Copy, Cpu, Database, Download, Edit3,
   File, FileCode2, FileJson, FileText, Files, Folder, FolderGit2, FolderOpen,
   GitBranch, Image, Images, LayoutGrid, Menu, MessageSquareText, MoreHorizontal,
-  Mic, MicOff, PanelLeftOpen, PanelRightClose, Play, Plus, RefreshCw, Save, Search, Settings,
+  PanelLeftOpen, PanelRightClose, Play, Plus, RefreshCw, Save, Search, Settings,
   ShieldCheck, Sparkles, Terminal, Trash2, UserRound, Wifi, WifiOff, X,
 } from 'lucide-react'
-import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
+import { assignConversationProject, connectConversation, createConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversations, loadOptionalMetadata, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import type { RoutingDecision, RoutingStage } from './api'
 import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
 import { ConversationListItem } from './ConversationListItem'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
 import { groupEventFeed } from './event-groups'
 import { MarkdownContent } from './MarkdownContent'
+import { Composer } from './Composer'
+import { InlineImages } from './InlineImages'
+import { contextUsageLabel } from './context-usage'
 import { RealtimeVoiceSession } from './realtime'
 import { exactTokenCountLabel, formatTokenCount } from './token-format'
 import { IDLE_TURN, isTurnActive, mergeStreamEvent, reduceTurnLifecycle, settleStreamEvents, stampAssistantMessageModel, type TurnAction } from './turn-lifecycle'
@@ -31,7 +34,7 @@ function IconButton({ label, children, onClick, active = false, disabled = false
 }
 
 function StatusDot({ status }: { status: Conversation['status'] }) {
-  return <span className={`status-dot ${status}`} aria-label={status}>{status === 'running' && <><span /><RefreshCw size={8} className="spin" /></>}</span>
+  return <span className={`status-dot ${status}`} aria-label={status} />
 }
 
 function ConnectionPill({ state }: { state: ConnectionState }) {
@@ -43,7 +46,7 @@ function ProjectMark({ project }: { project?: Project }) {
   return <span className="project-mark" style={{ '--project-color': project?.color ?? '#9ba8a0' } as React.CSSProperties}>{project?.name.slice(0, 2).toUpperCase() ?? '—'}</span>
 }
 
-function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewChat }: { data: BootstrapPayload; activeId: string; view: View; setView: (view: View) => void; onSelect: (conversation: Conversation) => void; onClose: () => void; onNewChat: () => void }) {
+function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewChat, historyState, onRetryHistory }: { data: BootstrapPayload; activeId: string; view: View; setView: (view: View) => void; onSelect: (conversation: Conversation) => void; onClose: () => void; onNewChat: () => void; historyState: 'loading' | 'ready' | 'error'; onRetryHistory: () => void }) {
   const [query, setQuery] = useState('')
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const [newestFirst, setNewestFirst] = useState(true)
@@ -63,7 +66,7 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
   })
   if (!newestFirst) chats.reverse()
   return <aside className="chat-sidebar">
-    <header className="sidebar-header"><button className="sidebar-brand" onClick={() => setView('chat')}><Sparkles size={22} /><span>Codex<small>2</small></span></button><IconButton label="Close conversations" onClick={onClose}><X size={iconSize} /></IconButton></header>
+    <header className="sidebar-header"><button className="sidebar-brand" onClick={() => setView('chat')}><img src="/favicon-v2.png" width={26} height={26} alt="" /><span>Codex<small>2</small></span></button><IconButton label="Close conversations" onClick={onClose}><X size={iconSize} /></IconButton></header>
     <button className="new-chat" onClick={onNewChat}><Edit3 size={18} />New chat</button>
     <label className="search-field"><Search size={15} className={searching ? 'searching' : ''} /><input value={query} onChange={e => { setQuery(e.target.value); if (!e.target.value) setRemoteChats(null) }} placeholder="Search chats" aria-label="Search all resumable chats" />{query && <button onClick={() => { setQuery(''); setRemoteChats(null) }} aria-label="Clear search"><X size={13} /></button>}</label>
     <nav className="sidebar-nav" aria-label="Workspace">
@@ -74,18 +77,20 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
       {data.projects.slice(0, 2).map(project => <button key={project.id} className={projectFilter === project.id ? 'active' : ''} onClick={() => setProjectFilter(project.id)}><span style={{ background: project.color }} />{project.name}</button>)}
     </div>
     <div className="chat-list" aria-live="polite">
+      {historyState === 'loading' && <p className="history-notice" role="status">Loading conversations…</p>}
+      {historyState === 'error' && <p className="history-notice" role="alert">Conversations could not be loaded. <button type="button" onClick={onRetryHistory}>Retry</button></p>}
       <div className="list-label"><span>{chats.length} resumable</span><button aria-label={`Sort ${newestFirst ? 'oldest' : 'newest'} first`} onClick={() => setNewestFirst(value => !value)}><ArrowUp size={13} className={newestFirst ? '' : 'flip'} /> {newestFirst ? 'Recent' : 'Oldest'}</button></div>
       {chats.map(chat => <ConversationListItem key={chat.id} conversation={chat} project={data.projects.find(project => project.id === chat.projectId)} active={chat.id === activeId && view === 'chat'} onSelect={() => onSelect(chat)} statusIndicator={chat.status === 'running' ? <StatusDot status={chat.status} /> : undefined} />)}
-      {!chats.length && <div className="empty-state compact"><Search size={22} /><p>No conversations match.</p></div>}
+      {!chats.length && historyState === 'ready' && <div className="empty-state compact"><Search size={22} /><p>No conversations match.</p></div>}
     </div>
     <footer className="sidebar-footer"><button className="profile-button" onClick={() => setView('settings')} aria-label="Open settings"><span className="avatar"><Terminal size={16} /></span><span><strong>Local workspace</strong><small>{data.demo ? 'Preview mode' : 'Connected through Codex'}</small></span><Settings size={17} /></button></footer>
   </aside>
 }
 
-const eventIcons: Record<EventKind, ComponentType<{ size?: number }>> = { message: Bot, reasoning: Sparkles, command: Terminal, file: FileCode2, approval: ShieldCheck, status: Activity }
+const eventIcons: Record<EventKind, ComponentType<{ size?: number }>> = { message: Bot, image: Image, reasoning: Sparkles, command: Terminal, file: FileCode2, approval: ShieldCheck, status: Activity }
 
 function EventState({ event }: { event: StreamEvent }) {
-  return <span className={`event-state ${event.state}`}>{event.state === 'running' && <RefreshCw size={11} className="spin" />}{event.state}</span>
+  return <span className={`event-state ${event.state}`}>{event.state}</span>
 }
 
 function MessageModel({ model }: { model: string }) {
@@ -130,26 +135,27 @@ function EventCard({ event, conversationId, fallbackModel, onApproval }: { event
       .catch(() => setApprovalError('Response was not accepted. The request remains pending; retry or use Codex CLI.'))
       .finally(() => setResponding(false))
   }
-  if (event.kind === 'message') {
+  if (event.kind === 'message' || event.kind === 'image') {
     const assistantRunning = event.role !== 'user' && event.state === 'running'
     const messageModel = typeof event.meta?.model === 'string' ? event.meta.model : fallbackModel
-    if (event.role !== 'user' && !event.content && !assistantRunning) return null
+    if (!event.content && !event.images?.length) return null
     return <article className={`message ${event.role ?? 'assistant'} ${event.state ?? ''} ${assistantRunning ? 'streaming' : ''}`}>
       <div className="message-avatar">{event.role === 'user' ? <UserRound size={17} /> : <Bot size={17} />}</div>
       <div className="message-body">
-        <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{event.role !== 'user' && <MessageModel model={messageModel} />}{assistantRunning && <span className="response-state"><RefreshCw size={10} className="spin" />Responding</span>}<time>{event.timestamp}</time></div>
+        <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{event.role !== 'user' && <MessageModel model={messageModel} />}<time>{event.timestamp}</time></div>
         {event.content
           ? event.role === 'user'
             ? <p>{event.content}</p>
             : <div className={`message-rendered ${assistantRunning ? 'streaming' : ''}`} aria-live={assistantRunning ? 'polite' : undefined}><MarkdownContent source={event.content} /></div>
-          : <div className="response-placeholder" role="status"><span /><span /><span />Preparing a response</div>}
+          : null}
+        {!!event.images?.length && <InlineImages images={event.images} />}
         {event.role !== 'user' && event.content && !assistantRunning && <div className="message-actions"><button onClick={() => void navigator.clipboard.writeText(event.content)}><Copy size={13} />Copy</button></div>}
       </div>
     </article>
   }
   if (event.kind === 'command') return <CommandCard event={event} />
-  if (event.kind === 'reasoning' && !event.content && event.state !== 'running') return null
-  if (event.kind === 'reasoning') return <details className="reasoning-disclosure"><summary><Sparkles size={15} /><span>{event.state === 'running' ? 'Thinking…' : 'Thought summary'}</span><ChevronRight size={14} className="disclosure-chevron" /></summary>{event.content ? <MarkdownContent source={event.content} compact /> : <p role="status">Preparing a readable summary…</p>}</details>
+  if (event.kind === 'reasoning' && !event.content) return null
+  if (event.kind === 'reasoning') return <details className="reasoning-disclosure"><summary><Sparkles size={15} /><span>Thought summary</span><ChevronRight size={14} className="disclosure-chevron" /></summary><MarkdownContent source={event.content} compact /></details>
   const Icon = eventIcons[event.kind]
   return <article className={`event-card ${event.kind} ${event.state ?? ''}`}>
     <div className="event-icon"><Icon size={15} /></div>
@@ -162,31 +168,8 @@ function EventCard({ event, conversationId, fallbackModel, onApproval }: { event
   </article>
 }
 
-function ContextRing({ percent }: { percent: number }) {
-  return <span className="context-ring" style={{ '--context': `${percent * 3.6}deg` } as React.CSSProperties}><span>{percent}%</span></span>
-}
-
-function Composer({ onSend, busy, voiceEnabled, voiceState, voiceMessage, onVoiceToggle }: { onSend: (prompt: string) => Promise<boolean>; busy: boolean; voiceEnabled: boolean; voiceState: VoiceState; voiceMessage: string; onVoiceToggle: () => void }) {
-  const [value, setValue] = useState('')
-  const sending = useRef(false)
-  const textarea = useRef<HTMLTextAreaElement>(null)
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!value.trim() || busy || sending.current) return
-    sending.current = true
-    const submitted = value
-    try { if (await onSend(submitted)) setValue(current => current === submitted ? '' : current) }
-    finally { sending.current = false }
-  }
-  const voiceActive = voiceState === 'live' || voiceState === 'connecting'
-  const voiceLabel = voiceActive ? 'Stop realtime voice' : voiceEnabled ? 'Start realtime voice' : voiceMessage || 'Realtime voice unavailable'
-  return <div className="composer-wrap">
-    <form className="composer" onSubmit={event => void submit(event)}>
-      <textarea ref={textarea} value={value} onChange={event => { setValue(event.target.value); event.target.style.height = 'auto'; event.target.style.height = `${Math.min(180, event.target.scrollHeight)}px` }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} placeholder="Ask anything, build something" aria-label="Message Codex" rows={1} />
-      <div className="composer-tools"><span className="auto-route-label"><Sparkles size={15} />Auto · Jev</span><div className="send-cluster"><IconButton label={voiceLabel} active={voiceActive} disabled={!voiceEnabled || busy || voiceState === 'stopping'} onClick={onVoiceToggle}>{voiceActive ? <MicOff size={18} /> : <Mic size={18} />}</IconButton><button type="submit" className="send-button" disabled={!value.trim() || busy} aria-label="Send message">{busy ? <RefreshCw size={18} className="spin" /> : <ArrowUp size={20} />}</button></div></div>
-    </form>
-    <p className={`composer-note voice-${voiceState}`} role={voiceState === 'error' ? 'alert' : 'status'}>{voiceState === 'connecting' ? 'Connecting voice…' : voiceState === 'live' ? 'Voice is live' : voiceState === 'error' ? voiceMessage : 'Jev chooses the model and reasoning for each message.'}</p>
-  </div>
+function ContextRing({ percent, known }: { percent: number; known: boolean }) {
+  return <span className="context-ring" style={{ '--context': `${percent * 3.6}deg` } as React.CSSProperties}><span>{known ? `${percent}%` : '—'}</span></span>
 }
 
 interface ChatSurfaceProps {
@@ -196,6 +179,7 @@ interface ChatSurfaceProps {
   models: string[]
   events: StreamEvent[]
   turn: TurnLifecycle
+  historyLoading: boolean
   connection: ConnectionState
   realtimeSignal: RealtimeSignal | null
   voiceCapability: RealtimeCapability
@@ -210,7 +194,7 @@ interface ChatSurfaceProps {
   openRight: () => void
 }
 
-function ChatSurface({ conversation, project, projects, events, turn, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
+function ChatSurface({ conversation, project, projects, events, turn, historyLoading, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
   const feedRef = useRef<HTMLElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -227,7 +211,6 @@ function ChatSurface({ conversation, project, projects, events, turn, connection
   const sendController = useRef<AbortController | null>(null)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; sendController.current?.abort() } }, [])
-  const [activeResponseModel, setActiveResponseModel] = useState(conversation.model)
   const autoTitleThread = useRef('')
   const currentTitle = useRef(conversation.title)
   const voiceSession = useMemo(() => new RealtimeVoiceSession((state, message) => { setVoiceState(state); setVoiceMessage(message ?? '') }), [])
@@ -275,8 +258,8 @@ function ChatSurface({ conversation, project, projects, events, turn, connection
     if (voiceState === 'live' || voiceState === 'connecting') void voiceSession.stop(true).catch(error => { setVoiceState('error'); setVoiceMessage(error instanceof Error ? error.message : 'Could not stop realtime voice.') })
     else void voiceSession.start(conversation.id).catch(() => undefined)
   }
-  const onSend = async (content: string): Promise<boolean> => {
-    if (submitting.current || turnActive || voiceState === 'live' || voiceState === 'connecting') return false
+  const onSend = async (content: string, plugins: string[]): Promise<boolean> => {
+    if (submitting.current || historyLoading || turnActive || voiceState === 'live' || voiceState === 'connecting') return false
     submitting.current = true
     const controller = new AbortController()
     sendController.current = controller
@@ -286,11 +269,11 @@ function ChatSurface({ conversation, project, projects, events, turn, connection
       const result = await sendPrompt(conversation.id, content, (stage, chosen) => {
         if (!mounted.current) return
         setRoutingStage(stage)
-        if (chosen) { setDecision(chosen); setSelectedModel(chosen.model); setActiveResponseModel(chosen.model); onTurnModel(chosen.model) }
+        if (chosen) { setDecision(chosen); setSelectedModel(chosen.model); onTurnModel(chosen.model) }
         // Register before the single HTTP request so late progress cannot reset
         // a turn that already completed on the event socket.
         if (stage === 'routing') { onTurnAction({ type: 'submitted', requestId }); onConversationStatus('running') }
-      }, controller.signal)
+      }, controller.signal, plugins)
       if (!mounted.current) return true
       onTurnAction({ type: 'acknowledged', requestId, turnId: result.turnId })
       if (isUntitledConversation(currentTitle.current) && autoTitleThread.current !== conversation.id) {
@@ -311,7 +294,6 @@ function ChatSurface({ conversation, project, projects, events, turn, connection
       if (mounted.current) setRoutingStage(null)
     }
   }
-  const hasRunningAssistant = events.some(event => event.kind === 'message' && event.role === 'assistant' && event.state === 'running')
   const feedEntries = groupEventFeed(events)
   return <main className={`chat-surface ${events.length === 0 ? 'empty-chat' : ''} ${leftOpen ? '' : 'left-panel-closed'}`}>
     <header className="chat-header">
@@ -320,19 +302,17 @@ function ChatSurface({ conversation, project, projects, events, turn, connection
         <div><StatusDot status={conversation.status} /><h2 className="conversation-title" onDoubleClick={openRename} title="Double-click to rename">{conversation.title}</h2><button type="button" className="rename-trigger" onClick={openRename} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></div>
         <span><FolderGit2 size={12} />{project?.name} · {conversation.cwd}</span>{renameError && !renaming && <small className="chat-name-error" role="alert">{renameError}</small>}
       </div>
-      <div className="chat-header-actions"><span className="chat-model-select" title={decision ? `Chosen by Jev · ${decision.effort} reasoning` : 'Jev will choose a model for your next message'}><Sparkles size={14} /><span>Auto</span><strong>{decision ? selectedModel.replace('gpt-', '') : 'Jev'}</strong></span><label className="chat-project-select" title="Assign project"><FolderGit2 size={14} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label><ConnectionPill state={connection} /><span className="context-button" title={`Context ${conversation.contextPercent}% used`}><ContextRing percent={conversation.contextPercent} /></span><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton></div>
+      <div className="chat-header-actions"><span className="chat-model-select" title={decision ? `Chosen by Jev · ${decision.effort} reasoning` : 'Jev will choose a model for your next message'}><Sparkles size={14} /><span>Auto</span><strong>{decision ? selectedModel.replace('gpt-', '') : 'Jev'}</strong></span><label className="chat-project-select" title="Assign project"><FolderGit2 size={14} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project">{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label><ConnectionPill state={connection} /><span className="context-button" tabIndex={0} aria-label={contextUsageLabel(conversation)} title={contextUsageLabel(conversation)}><ContextRing percent={conversation.contextPercent} known={conversation.contextWindowTokens !== undefined} /></span><IconButton label="Open context panel" onClick={openRight}><PanelRightClose size={18} /></IconButton></div>
     </header>
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       {events.length === 0 && <div className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>A clear space to think, create, and get things done.</p><div className="welcome-hints"><span><Code2 size={16} />Build something</span><span><Search size={16} />Explore a project</span><span><Sparkles size={16} />Refine an idea</span></div></div>}
       {feedEntries.map(entry => entry.type === 'commands'
         ? <CommandGroup commands={entry.commands} key={entry.id} />
         : <EventCard event={entry.event} conversationId={conversation.id} fallbackModel={conversation.model} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
-      {!routingStage && turn.phase === 'waiting' && !hasRunningAssistant && <article className="message assistant streaming turn-placeholder"><div className="message-avatar"><Bot size={17} /></div><div className="message-body"><div className="message-author">Codex<MessageModel model={activeResponseModel} /><span className="response-state"><RefreshCw size={10} className="spin" />Waiting</span></div><div className="response-placeholder" role="status"><span /><span /><span />Preparing a response</div></div></article>}
-      {!routingStage && turnActive && <div className="turn-activity" role="status" aria-live="polite"><RefreshCw size={12} className="spin" /><span><strong>{turn.phase === 'waiting' ? 'Turn in progress' : 'Response streaming'}</strong><small>{turn.phase === 'waiting' ? 'Waiting for the first Codex event…' : 'New text will appear here as it arrives.'}</small></span></div>}
-      {routingStage && <div className="routing-progress" role="status" aria-live="polite"><RefreshCw size={16} className="spin" /><span>{routingStage === 'routing' ? 'Choosing the right model…' : routingStage === 'switching' ? `Switching to ${decision?.model}…` : 'Sending your message…'}</span></div>}
+      {(routingStage || turnActive || historyLoading) && <div className="chat-progress" role="status" aria-live="polite"><RefreshCw size={14} className="spin" /><span>{routingStage === 'routing' ? 'Choosing the right model…' : routingStage === 'switching' ? `Switching to ${decision?.model}…` : routingStage === 'sending' ? 'Sending your message…' : turnActive ? turn.phase === 'streaming' ? 'Responding…' : 'Thinking…' : 'Loading conversation…'}</span></div>}
       <div ref={endRef} />
     </section>
-    <Composer busy={turnActive || routingStage !== null || voiceState === 'live' || voiceState === 'connecting'} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} />
+    <Composer cwd={conversation.cwd} busy={historyLoading || turnActive || routingStage !== null || voiceState === 'live' || voiceState === 'connecting'} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} />
     {renaming && <Modal title="Rename conversation" description="Choose a concise name that will be easy to find later." onClose={closeRename}><form className="modal-form rename-modal-form" onSubmit={submitRename}><label>Conversation name<input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onFocus={event => event.currentTarget.select()} onKeyDown={event => { if (event.key === 'Escape') closeRename() }} aria-label="Conversation name" /></label>{renameError && <p className="modal-error" role="alert">{renameError}</p>}<footer><button type="button" className="button" disabled={savingName} onClick={closeRename}>Cancel</button><button className="button primary" disabled={!renameValue.trim() || savingName}>{savingName ? 'Saving…' : 'Save'}</button></footer></form></Modal>}
   </main>
 }
@@ -452,6 +432,7 @@ function SideChatsContext({ conversations, current, onSelect }: { conversations:
 
 function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose }: { files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
   const [tree, setTree] = useState(files)
+  const [treeError, setTreeError] = useState('')
   const [selected, setSelected] = useState<WorkspaceFile | null>(null)
   const [content, setContent] = useState('')
   const [editing, setEditing] = useState(false)
@@ -493,9 +474,15 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
       return patch(current)
     })).catch(() => undefined)
   }
+  useEffect(() => {
+    if (demo || activeTool !== 'explorer') return
+    let disposed = false
+    void loadWorkspaceTree('.').then(items => { if (!disposed) { setTree(items); setTreeError('') } }).catch(() => { if (!disposed) setTreeError('Workspace files could not be loaded. Use Refresh to try again.') })
+    return () => { disposed = true }
+  }, [activeTool, demo])
   const refreshTree = () => {
     if (demo) { setTree(files); return }
-    void loadWorkspaceTree('.').then(setTree).catch(() => undefined)
+    void loadWorkspaceTree('.').then(items => { setTree(items); setTreeError('') }).catch(() => setTreeError('Workspace files could not be loaded. Use Refresh to try again.'))
   }
   const activeDefinition = CONTEXT_TOOLS.find(tool => tool.id === activeTool) ?? CONTEXT_TOOLS[0]
   const workspaceActive = activeTool === 'explorer' || activeTool === 'changes'
@@ -515,6 +502,7 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
     {workspaceActive && <section className="workspace-context" id={`context-tool-${activeTool}`} role="tabpanel" aria-label={activeDefinition.label}>
       <div className="workspace-path"><FolderOpen size={14} /><span>{activeTool === 'changes' ? changes.repoRoot ? `Changes · ${changes.repoRoot}` : 'Changed files' : 'Workspace root'}</span></div>
       <div className="file-tree" aria-label={activeTool === 'changes' ? 'Workspace changes' : 'Workspace files'}>
+        {activeTool === 'explorer' && treeError && <p className="history-notice" role="alert">{treeError}</p>}
         {(activeTool === 'explorer' ? tree : reportedChanges).map(file => <FileTreeItem key={file.id} file={file} level={0} activePath={selected?.path ?? null} onSelect={selectFile} onExpand={expandFolder} />)}
         {activeTool === 'changes' && changesState === 'loading' && !reportedChanges.length && <div className="context-empty"><RefreshCw size={23} className="spin" /><strong>Reading Git status</strong><span>Only the selected conversation folder inside the configured workspace is inspected.</span></div>}
         {activeTool === 'changes' && changesState === 'error' && <div className="context-empty error"><AlertCircle size={23} /><strong>Changes unavailable</strong><span>{changesError}</span></div>}
@@ -574,12 +562,19 @@ function ImagesPage({ data, onChange }: { data: BootstrapPayload; onChange: (ima
   const fileInput = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (data.demo) return
+    let disposed = false
+    void listImages().then(images => { if (!disposed) onChange(images) }).catch(() => { if (!disposed) setError('Images could not be loaded. Use Refresh to try again.') })
+    return () => { disposed = true }
+  }, [data.demo, onChange])
   const source = data.images.length ? data.images : data.demo ? imageTiles.map(([name], index) => ({ id: `demo-${index}`, name, url: '', mime: 'image/png', size: 0, modifiedAt: 'Demo preview' })) : []
   const tiles = source.filter(asset => asset.name.toLowerCase().includes(query.toLowerCase())).map((asset, index) => ({ ...asset, color: imageTiles[index % imageTiles.length][1] }))
-  const upload = (files: File[]) => { setBusy(true); void importImages(files).then(uploaded => onChange([...uploaded, ...data.images])).finally(() => setBusy(false)) }
-  const refresh = () => { setBusy(true); void listImages().then(onChange).finally(() => setBusy(false)) }
-  const remove = (id: string) => { if (id.startsWith('demo-')) return; void deleteImage(id).then(() => onChange(data.images.filter(image => image.id !== id))) }
-  return <div className="page"><PageHeader eyebrow="Assets" title="Image library" description="Browse generated images and workspace previews kept on this device." action={<><input ref={fileInput} className="visually-hidden" type="file" accept="image/*" multiple onChange={event => event.target.files && upload([...event.target.files])} /><button className="button primary" onClick={() => fileInput.current?.click()} disabled={busy}><Plus size={15} />{busy ? 'Working…' : 'Import images'}</button></>} /><div className="library-toolbar"><label className="search-field"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search images" aria-label="Search images" /></label><button className="button" onClick={refresh} disabled={busy}><RefreshCw size={14} className={busy ? 'spin' : ''} />Refresh</button><button className="button" disabled title="Grid is the only available layout"><LayoutGrid size={14} />Grid</button></div><div className="image-grid">{tiles.map((asset, index) => <article className="image-card" key={asset.id}><div className={`generated-art ${asset.color}`}>{asset.url ? <img src={asset.url} alt={asset.name} /> : <><div className="art-orbit" /><div className="art-core"><Image size={27} /></div><span>{index + 1}</span></>}</div><div><h3>{asset.name}</h3><p>{asset.size ? `${Math.round(asset.size / 1024)} KB · ${asset.modifiedAt}` : asset.modifiedAt}</p></div><button aria-label={`Delete ${asset.name}`} onClick={() => remove(asset.id)} disabled={asset.id.startsWith('demo-')}><Trash2 size={16} /></button></article>)}</div>{!tiles.length && <div className="empty-state image-empty"><Images size={28} /><p>No images match this search.</p></div>}</div>
+  const upload = (files: File[]) => { setBusy(true); setError(''); void importImages(files).then(uploaded => onChange([...uploaded, ...data.images])).catch(() => setError('Image import failed. Check the file format and local service.')).finally(() => setBusy(false)) }
+  const refresh = () => { setBusy(true); setError(''); void listImages().then(onChange).catch(() => setError('Images could not be loaded. Use Refresh to try again.')).finally(() => setBusy(false)) }
+  const remove = (id: string) => { if (id.startsWith('demo-')) return; void deleteImage(id).then(() => onChange(data.images.filter(image => image.id !== id))).catch(() => setError('Image deletion failed. Refresh the library before retrying.')) }
+  return <div className="page"><PageHeader eyebrow="Assets" title="Image library" description="Browse generated images and workspace previews kept on this device." action={<><input ref={fileInput} className="visually-hidden" type="file" accept="image/*" multiple onChange={event => event.target.files && upload([...event.target.files])} /><button className="button primary" onClick={() => fileInput.current?.click()} disabled={busy}><Plus size={15} />{busy ? 'Working…' : 'Import images'}</button></>} /><div className="library-toolbar"><label className="search-field"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search images" aria-label="Search images" /></label><button className="button" onClick={refresh} disabled={busy}><RefreshCw size={14} className={busy ? 'spin' : ''} />Refresh</button><button className="button" disabled title="Grid is the only available layout"><LayoutGrid size={14} />Grid</button></div>{error && <p role="alert">{error}</p>}<div className="image-grid">{tiles.map((asset, index) => <article className="image-card" key={asset.id}><div className={`generated-art ${asset.color}`}>{asset.url ? <InlineImages images={[{ url: asset.url, alt: asset.name }]} /> : <><div className="art-orbit" /><div className="art-core"><Image size={27} /></div><span>{index + 1}</span></>}</div><div><h3>{asset.name}</h3><p>{asset.size ? `${Math.round(asset.size / 1024)} KB · ${asset.modifiedAt}` : asset.modifiedAt}</p></div><button aria-label={`Delete ${asset.name}`} onClick={() => remove(asset.id)} disabled={asset.id.startsWith('demo-')}><Trash2 size={16} /></button></article>)}</div>{!tiles.length && !error && <div className="empty-state image-empty"><Images size={28} /><p>No images match this search.</p></div>}</div>
 }
 
 function ProgressBar({ value }: { value: number | null }) { return <div className="progress"><span style={{ width: `${value ?? 0}%` }} /></div> }
@@ -619,6 +614,14 @@ function conversationStatusForTurn(turn: TurnLifecycle): Conversation['status'] 
 
 export default function App() {
   const [data, setData] = useState<BootstrapPayload | null>(null)
+  const [bootAttempt, setBootAttempt] = useState(0)
+  const [bootError, setBootError] = useState('')
+  const [historyAttempt, setHistoryAttempt] = useState(0)
+  const [historyState, setHistoryState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [creationState, setCreationState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const creating = useRef(false)
+  const choseConversation = useRef(false)
+  const ready = data !== null
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [view, setView] = useState<View>('chat')
   const [activeId, setActiveId] = useState('')
@@ -626,6 +629,7 @@ export default function App() {
   const activeModelRef = useRef('')
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [turn, setTurn] = useState<TurnLifecycle>(IDLE_TURN)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [realtimeSignal, setRealtimeSignal] = useState<RealtimeSignal | null>(null)
   const [voiceCapability, setVoiceCapability] = useState<RealtimeCapability>({ available: false, reason: 'Checking realtime voice support…' })
   const [leftOpen, setLeftOpen] = useState(() => !isNarrowLayout())
@@ -634,7 +638,47 @@ export default function App() {
 
   useLayoutEffect(() => { activeIdRef.current = activeId }, [activeId])
 
-  useEffect(() => { void loadBootstrap().then(result => { const first = result.data.conversations[0]; setData(result.data); setConnection(result.connection); activeModelRef.current = first?.model ?? result.data.models[0] ?? ''; setActiveId(first?.id ?? '') }) }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadBootstrap(controller.signal).then(result => {
+      if (controller.signal.aborted) return
+      const first = result.data.conversations[0]
+      setData(result.data); setConnection(result.connection)
+      activeModelRef.current = first?.model ?? result.data.models[0] ?? ''
+      activeIdRef.current = first?.id ?? ''
+      setActiveId(first?.id ?? '')
+    }).catch(() => { if (!controller.signal.aborted) setBootError('The local workspace could not be opened. Check the service, then retry.') })
+    return () => controller.abort()
+  }, [bootAttempt])
+  useEffect(() => {
+    if (!ready) return
+    const controller = new AbortController()
+    void loadConversations(controller.signal).then(conversations => {
+      if (controller.signal.aborted) return
+      setData(current => {
+        if (!current) return current
+        const existing = new Set(current.conversations.map(chat => chat.id))
+        const added = conversations.filter(chat => !existing.has(chat.id)).map(chat => ({ ...chat, projectId: chat.projectId || current.projects[0]?.id || '' }))
+        const merged = [...current.conversations, ...added]
+        return { ...current, conversations: merged, projects: current.projects.map(project => ({ ...project, chatCount: merged.filter(chat => chat.projectId === project.id).length })) }
+      })
+      if (!activeIdRef.current && !choseConversation.current && conversations[0]) {
+        activeIdRef.current = conversations[0].id
+        activeModelRef.current = conversations[0].model
+        setActiveId(conversations[0].id)
+      }
+      setHistoryState('ready')
+    }).catch(() => { if (!controller.signal.aborted) setHistoryState('error') })
+    return () => controller.abort()
+  }, [ready, historyAttempt])
+  useEffect(() => {
+    if (!ready) return
+    const controller = new AbortController()
+    void loadOptionalMetadata(controller.signal).then(metadata => {
+      if (!controller.signal.aborted) setData(current => current ? { ...current, ...metadata } : current)
+    })
+    return () => controller.abort()
+  }, [ready])
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
     const media = window.matchMedia(narrowLayoutQuery)
@@ -650,6 +694,8 @@ export default function App() {
     if (!activeId) return
     let disposed = false
     let hydrating = true
+    let hydrationVersion = 0
+    let hydrationController: AbortController | null = null
     const queuedUpdates: LiveUpdate[] = []
     const setConversationStatus = (status: Conversation['status']) => setData(current => current ? {
       ...current,
@@ -658,10 +704,10 @@ export default function App() {
     const applyUpdate = (update: LiveUpdate) => {
       if (update.selectedModel) {
         activeModelRef.current = update.selectedModel
-        setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeId ? { ...chat, model: update.selectedModel! } : chat) } : current)
+        setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeId ? { ...chat, model: update.selectedModel!, contextPercent: 0, contextUsedTokens: undefined, contextWindowTokens: undefined } : chat) } : current)
       }
       if (update.event) setEvents(current => stampAssistantMessageModel(mergeStreamEvent(current, update.event!), activeModelRef.current))
-      if (update.contextPercent !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, contextPercent: update.contextPercent! } : conversation) } : current)
+      if (update.contextUsedTokens !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, contextPercent: update.contextPercent ?? 0, contextUsedTokens: update.contextUsedTokens, contextWindowTokens: update.contextWindowTokens } : conversation) } : current)
       if (update.conversationTitle !== undefined) setData(current => current ? { ...current, conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, title: update.conversationTitle! } : conversation) } : current)
       if (update.realtime) setRealtimeSignal(update.realtime)
       if (update.turn) {
@@ -680,18 +726,24 @@ export default function App() {
     }
     const hydrate = async () => {
       hydrating = true
-      const snapshot = await loadConversationSnapshot(activeId, data?.demo ?? false)
-      if (disposed) return
+      const version = ++hydrationVersion
+      hydrationController?.abort()
+      hydrationController = new AbortController()
+      queueMicrotask(() => { if (!disposed) setHistoryLoading(true) })
+      const snapshot = await loadConversationSnapshot(activeId, data?.demo ?? false, hydrationController.signal)
+      if (disposed || version !== hydrationVersion) return
       setEvents(stampAssistantMessageModel(snapshot.events, activeModelRef.current))
       setTurn(snapshot.turn)
       const status = conversationStatusForTurn(snapshot.turn)
       if (status) setConversationStatus(status)
       hydrating = false
+      setHistoryLoading(false)
       queuedUpdates.splice(0).forEach(applyUpdate)
     }
     queueMicrotask(() => {
       if (disposed) return
       setEvents([])
+      setHistoryLoading(true)
       setTurn(IDLE_TURN)
       setRealtimeSignal(null)
       setVoiceCapability({ available: false, reason: 'Checking realtime voice support…' })
@@ -704,10 +756,12 @@ export default function App() {
       if (hydrating) queuedUpdates.push(update)
       else applyUpdate(update)
     }, setConnection, () => { void hydrate() })
-    return () => { disposed = true; disconnect() }
+    return () => { disposed = true; hydrationController?.abort(); disconnect() }
   }, [activeId, data?.demo, data?.realtimeVoiceReason])
 
-  if (!data) return <div className="loading-screen"><div className="loading-mark"><Sparkles size={26} /></div><span>Opening local workspace</span><div className="loading-bar"><i /></div></div>
+  const changeImages = useCallback((images: BootstrapPayload['images']) => setData(current => current ? { ...current, images } : current), [])
+
+  if (!data) return <div className="loading-screen"><div className="loading-mark"><Sparkles size={26} /></div>{bootError ? <><span role="alert">{bootError}</span><button className="button" onClick={() => { setBootError(''); setBootAttempt(current => current + 1) }}>Retry opening workspace</button></> : <><span>Opening local workspace</span><div className="loading-bar"><i /></div></>}</div>
   const activeConversation = data.conversations.find(chat => chat.id === activeId) ?? data.conversations[0]
   const activeProject = data.projects.find(project => project.id === activeConversation?.projectId)
   const openLeft = () => { if (isNarrowLayout()) setRightOpen(false); setLeftOpen(true) }
@@ -715,6 +769,8 @@ export default function App() {
   const openRight = () => { if (isNarrowLayout()) setLeftOpen(false); setRightOpen(true) }
   const showView = (next: View) => { setView(next); if (isNarrowLayout()) { setLeftOpen(false); setRightOpen(false) } }
   const selectConversation = (conversation: Conversation) => {
+    choseConversation.current = true
+    activeIdRef.current = conversation.id
     setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === conversation.id) ? current.conversations : [conversation, ...current.conversations] } : current)
     activeModelRef.current = conversation.model
     setActiveId(conversation.id)
@@ -731,32 +787,31 @@ export default function App() {
     }
   }
   const newChat = () => {
-      void createConversation({ projectId: activeProject?.id, cwd: activeProject?.path !== '.' ? activeProject?.path : activeConversation?.cwd, model: data.models[0] }).then(conversation => {
-        setData(current => current ? { ...current, conversations: [conversation, ...current.conversations] } : current)
-        activeModelRef.current = conversation.model
-        setActiveId(conversation.id)
-      }).catch(() => {
-        if (data.demo) {
-          const conversation: Conversation = { id: crypto.randomUUID(), projectId: activeProject?.id ?? data.projects[0]?.id ?? '', title: 'New demo conversation', preview: 'Visual-only local session preview', updatedAt: 'Now', status: 'ready', cwd: activeProject?.path ?? '/workspace', model: 'gpt-6.1-sol', contextPercent: 0 }
-          setData(current => current ? { ...current, conversations: [conversation, ...current.conversations] } : current)
-          activeModelRef.current = conversation.model
-          setActiveId(conversation.id)
-        } else {
-          setEvents(current => [...current, { id: crypto.randomUUID(), kind: 'status', title: 'Conversation not created', content: 'Codex could not create a local thread. Check the connection and selected workspace.', timestamp: 'Now', state: 'failed' }])
-        }
-      })
-      showView('chat')
+    if (creating.current) return
+    choseConversation.current = true
+    creating.current = true
+    setCreationState('loading')
+    void createConversation({ projectId: activeProject?.id, cwd: activeProject?.path !== '.' ? activeProject?.path : activeConversation?.cwd, model: data.models[0] }).then(conversation => {
+      setData(current => current ? { ...current, conversations: [conversation, ...current.conversations.filter(chat => chat.id !== conversation.id)] } : current)
+      activeModelRef.current = conversation.model
+      activeIdRef.current = conversation.id
+      setActiveId(conversation.id)
+      setCreationState('idle')
+    }).catch(() => { setCreationState('error') }).finally(() => { creating.current = false })
+    showView('chat')
   }
   return <div className={`app-shell ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
     {!leftOpen && view !== 'chat' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
-    {leftOpen && <ChatSidebar view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onClose={() => setLeftOpen(false)} onNewChat={newChat} />}
+    {leftOpen && <ChatSidebar view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onClose={() => setLeftOpen(false)} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={() => setLeftOpen(false)} />
     <div className="content-area">
-      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={model => { activeModelRef.current = model }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
-      {view === 'chat' && !activeConversation && <main className="chat-surface"><header className="chat-header"><IconButton label="Expand conversations" onClick={openLeft}><Menu size={20} /></IconButton><span>Codex 2</span><ConnectionPill state={connection} /></header><section className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>Start a conversation in your local workspace.</p><button className="button primary start-chat" onClick={newChat}><Edit3 size={17} />New chat</button></section></main>}
+      {creationState === 'error' && <p className="creation-notice" role="alert">Conversation could not be created. Check the local Codex service. <button className="button" onClick={newChat}>Retry</button></p>}
+      {creationState === 'loading' && <p className="creation-notice" role="status">Creating conversation…</p>}
+      {view === 'chat' && activeConversation && <ChatSurface key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={model => { activeModelRef.current = model }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
+      {view === 'chat' && !activeConversation && <main className="chat-surface"><header className="chat-header"><IconButton label="Expand conversations" onClick={openLeft}><Menu size={20} /></IconButton><span>Codex 2</span><ConnectionPill state={connection} /></header><section className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>Start a conversation in your local workspace.</p><button className="button primary start-chat" disabled={creationState === 'loading'} onClick={newChat}><Edit3 size={17} />New chat</button></section></main>}
       {view === 'projects' && <ProjectsPage projects={data.projects} conversations={data.conversations} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} />}
       {view === 'schedules' && <SchedulesPage schedules={data.schedules} onAdd={schedule => setData(current => current ? { ...current, schedules: [schedule, ...current.schedules] } : current)} onUpdate={schedule => setData(current => current ? { ...current, schedules: current.schedules.map(item => item.id === schedule.id ? schedule : item) } : current)} />}
-      {view === 'images' && <ImagesPage data={data} onChange={images => setData(current => current ? { ...current, images } : current)} />}
+      {view === 'images' && <ImagesPage data={data} onChange={changeImages} />}
       {view === 'settings' && <SettingsPage data={data} connection={connection} />}
     </div>
     {rightOpen && <ContextPanel files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={() => setRightOpen(false)} />}

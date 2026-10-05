@@ -5,9 +5,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from .codex_client import CodexAppServerClient, CodexRPCError, CodexUnavailable
+from .codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, CodexUnavailable
 from .config import Settings, sandbox_policy
 from .models import TurnStart
+from .plugins import PluginCatalog, PluginError
 from .task_router import EFFORTS, MODELS, RoutingError, TaskRouter
 
 UNSUPPORTED_HISTORY_MESSAGE = (
@@ -28,8 +29,9 @@ class MessageError(RuntimeError):
 
 
 class RoutedChat:
-    def __init__(self, codex: CodexAppServerClient, router: TaskRouter, settings: Settings):
+    def __init__(self, codex: CodexAppServerClient, router: TaskRouter, settings: Settings, plugins: PluginCatalog):
         self.codex, self.router, self.settings = codex, router, settings
+        self.plugins = plugins
         self._sending: set[str] = set()
 
     @asynccontextmanager
@@ -79,6 +81,7 @@ class RoutedChat:
                 status = thread.get("status", {})
                 if status == "active" or isinstance(status, dict) and status.get("type") == "active":
                     raise MessageError(409, "Wait for the current turn to finish before sending another message.")
+                mentions = await self.plugins.resolve(body.plugins, body.input, thread.get("cwd") or str(self.settings.workspace_root))
                 await check_cancelled()
                 decision = await self.router.choose(body.input)
                 model, effort = decision.get("model"), decision.get("effort")
@@ -97,7 +100,7 @@ class RoutedChat:
                 await check_cancelled()
                 params = {
                     "threadId": thread_id,
-                    "input": [{"type": "text", "text": body.input}],
+                    "input": [{"type": "text", "text": body.input}, *mentions],
                     "model": model, "effort": effort,
                     "approvalPolicy": body.approval_policy or self.settings.approval_policy,
                 }
@@ -109,6 +112,10 @@ class RoutedChat:
                 yield {"result": {**result, "decision": decision, "modelChangeAcknowledged": True}}
             except RoutingError as exc:
                 raise MessageError(409, str(exc)) from None
+            except PluginError as exc:
+                raise MessageError(409, str(exc)) from None
+            except CodexTimeout:
+                raise MessageError(504, "Codex took too long to respond. Check the conversation before retrying.") from None
             except CodexUnavailable:
                 raise MessageError(503, "The local Codex service disconnected. Check the conversation before retrying.") from None
             except CodexRPCError as exc:

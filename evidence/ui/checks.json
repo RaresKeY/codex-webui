@@ -26,5 +26,15 @@
     "new chat",
     "secondary page access"
   ],
+  "featureChecks": [
+    "shell before slow history",
+    "@ plugin keyboard selection and native metadata",
+    "draft edited during send",
+    "inline images decoded and modal Escape/focus",
+    "one turn spinner, no bottom plate",
+    "last context total and hover limit",
+    "explicit startup error and history retry",
+    "phone plugin menu without overflow"
+  ],
   "uncaughtErrors": 0
 }

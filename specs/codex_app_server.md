@@ -27,6 +27,10 @@ The companion directly launches its configured `codex app-server` with inherited
 
 The experimental opt-in is required by the public realtime methods. This client does not claim desktop attestation support. The adapter correlates numeric client request IDs, retains server-initiated requests, automatically answers `currentTime/read`, drains stderr without retaining it, caps protocol lines at 32 MiB, and clears requests on server resolution or disconnect.
 
+WebSocket forwarding watches client disconnects independently of native events and cancels both tasks when either side ends, releasing idle subscriptions without waiting for another notification. The compatibility `/api/conversations/{id}/turns` URL shares the same routed operation, including streamed progress.
+
+Client RPCs also have a configurable 30-second default deadline, removing cancelled/timed-out futures and ignoring late responses. Installed-plugin discovery uses `plugin/installed` with workspace `cwds`; explicit selections resolve to native `UserInput` mention entries (`plugin://name@marketplace`) before routing. Image user inputs, image-generation/view items and raster tool outputs project to bounded previews. `ThreadTokenUsage.last.totalTokens` and `modelContextWindow` drive context occupancy. See `chat_interactions.md` for payload validation and browser behavior.
+
 WebUI-created durable threads explicitly request `historyMode: "legacy"`, including new scheduler threads. In the installed 0.160.0 runtime with current external state, omitting this field created paginated threads that refused full reads and resume with `list_turns is not supported yet`. The adapter uses the supported legacy path for new threads and returns a bounded 409 with a New chat recovery instruction for existing incompatible threads. It does not rewrite stored history, substitute an empty transcript, or replay asks.
 
 The supported thread/turn surface is `thread/list`, `thread/read`, `thread/start`, `thread/loaded/list`, `thread/resume`, `thread/settings/update`, `thread/name/set`, `thread/archive`, `thread/fork`, `thread/backgroundTerminals/list`, `turn/start`, and `turn/interrupt`. Direct steering is rejected at the HTTP boundary. `thread/start` supports `ephemeral` but accepts no prompt; read-only ephemeral mode is used by live verification to avoid persistent thread/config effects. A just-created thread is provisional until its first user turn: if App Server rejects `thread/read(includeTurns: true)` as not materialized, the companion retries metadata-only read for history hydration only. That read does not acknowledge a model change.
@@ -56,6 +60,8 @@ The WebRTC v3 path uses App Server's current authentication provider. Inherited 
 - `tools/smoke_app_server.py` performs the signed-in ephemeral thread and denied approval check while comparing `config.toml` digests.
 
 ## Gaps
+
+- Native full history reads of ephemeral threads are unsupported in 0.160.0; metadata/settings checks still work. Ordinary UI chats use durable legacy threads.
 
 - Add negotiated compatibility ranges instead of a documented tested version.
 - Container voice capability remains disabled by the inherited runtime gate; no live voice support is claimed.

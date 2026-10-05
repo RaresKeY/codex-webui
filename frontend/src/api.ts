@@ -1,7 +1,9 @@
-import { demoBootstrap, demoEvents, demoFileContents } from './demo'
+import { demoEvents, demoFileContents } from './demo'
+import { contentImages, imageSource } from './images'
+import { contextUsage } from './context-usage'
 import { UNTITLED_CONVERSATION } from './conversation-title'
 import type { RealtimeVoice, RealtimeVoicesList, WebRtcRealtimeVersion } from './app-server-protocol'
-import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
+import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Plugin, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
 type JsonObject = Record<string, unknown>
@@ -21,7 +23,7 @@ export function turnStartFailureMessage(error: unknown): string {
   if (message.includes('not materialized') || message.includes('no rollout found')) {
     return 'This new conversation was not ready for its first turn. Your prompt is preserved above; retry after reconnecting the local service.'
   }
-  if (error instanceof ApiError && error.status === 409 && !message.includes('rpc_error')) {
+  if (error instanceof ApiError && [409, 502, 504].includes(error.status) && !object(error.payload).rpc_error && !message.includes('rpc_error')) {
     return `${error.message} Your prompt is preserved above for retry.`
   }
   return 'The local service could not start this Codex turn. Your prompt is preserved above; reconnect and retry.'
@@ -42,9 +44,24 @@ async function fetchResponse(path: string, init?: RequestInit): Promise<Response
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetchResponse(path, init)
-  if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
+  const read = (init?.method ?? 'GET').toUpperCase() === 'GET'
+  const controller = new AbortController()
+  let timedOut = false
+  const forwardAbort = () => controller.abort(init?.signal?.reason)
+  if (init?.signal?.aborted) forwardAbort()
+  init?.signal?.addEventListener('abort', forwardAbort, { once: true })
+  const timer = read ? setTimeout(() => { timedOut = true; controller.abort() }, path === '/bootstrap' ? 8000 : 35000) : undefined
+  try {
+    const response = await fetchResponse(path, { ...init, signal: read ? controller.signal : init?.signal })
+    if (response.status === 204) return undefined as T
+    return await response.json() as T
+  } catch (error) {
+    if (timedOut) throw new ApiError(504, 'The local service took too long to respond. Try loading this data again.')
+    throw error
+  } finally {
+    clearTimeout(timer)
+    init?.signal?.removeEventListener('abort', forwardAbort)
+  }
 }
 
 function object(value: unknown): JsonObject { return value && typeof value === 'object' ? value as JsonObject : {} }
@@ -262,10 +279,20 @@ export function normalizeItem(raw: unknown, index: number): StreamEvent | null {
   const id = String(item.id ?? `history-${index}`)
   const timestamp = timeLabel(item.timestamp ?? item.createdAt ?? item.created_at)
   const state = item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : item.status ? 'done' : undefined
-  if (type.includes('user')) return { id, kind: 'message', role: 'user', content: contentText(item.content ?? item.message ?? item.input), timestamp, state }
-  if (type.includes('agent') || type.includes('assistant') || type === 'message') return { id, kind: 'message', role: 'assistant', content: contentText(item.text ?? item.content ?? item.message ?? item.output), timestamp, state }
+  if (type.includes('user')) return { id, kind: 'message', role: 'user', content: contentText(item.content ?? item.message ?? item.input), timestamp, state, images: contentImages(item.content ?? item.input) }
+  if (type.includes('agent') || type.includes('assistant') || type === 'message') return { id, kind: 'message', role: 'assistant', content: contentText(item.text ?? item.content ?? item.message ?? item.output), timestamp, state, images: contentImages(item.content ?? item.output) }
   if (type === 'plan' || type.includes('plan')) return { id, kind: 'reasoning', title: 'Plan', content: contentText(item.text ?? item.content), timestamp, state: state ?? 'done' }
   if (type.includes('reason')) return { id, kind: 'reasoning', title: 'Reasoning summary', content: contentText(item.summary), timestamp, state: state ?? 'done' }
+  if (type === 'imagegeneration' || type === 'imageview') {
+    const source = type === 'imageview' ? item.path : typeof item.result === 'string' && item.result ? item.result.startsWith('data:') ? item.result : `data:image/png;base64,${item.result}` : item.savedPath
+    const url = typeof source === 'string' ? imageSource(source) : undefined
+    return { id, kind: 'image', role: 'assistant', content: item.failure ? 'Image generation failed. Check the image usage limit before trying again.' : !url && state === 'done' ? 'Image preview unavailable.' : '', images: url ? [{ url, alt: type === 'imageview' ? 'Viewed image' : 'Generated image' }] : [], timestamp, state }
+  }
+  if (['mcptoolcall', 'dynamictoolcall', 'functioncalloutput'].includes(type)) {
+    const content = item.contentItems ?? object(item.result).content ?? item.output
+    const images = contentImages(content)
+    if (images.length) return { id, kind: 'image', role: 'assistant', content: contentText(content), images, timestamp, state }
+  }
   if (type.includes('command') || type.includes('exec')) {
     const command = contentText(item.command ?? item.content)
     const output = contentText(item.aggregatedOutput)
@@ -366,15 +393,11 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   if (method === 'item/plan/delta') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Plan', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/reasoning/summaryTextDelta') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Reasoning summary', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/reasoning/summaryPartAdded') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Reasoning summary', content: number(params.summaryIndex) > 0 ? '\n\n' : '', timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
-  if (method === 'item/reasoning/textDelta') return { event: { id: String(params.itemId), kind: 'reasoning', title: 'Reasoning', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
+  if (method === 'item/reasoning/textDelta') return null
   if (method === 'item/commandExecution/outputDelta') return { event: { id: String(params.itemId), kind: 'command', title: 'Command output', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'item/fileChange/outputDelta') return { event: { id: String(params.itemId), kind: 'file', title: 'Workspace changes', content: text(params.delta), timestamp: 'Now', state: 'running', append: true }, turn: { kind: 'activity', turnId } }
   if (method === 'thread/tokenUsage/updated') {
-    const tokenUsage = object(params.tokenUsage ?? params.usage)
-    const total = object(tokenUsage.total ?? tokenUsage.totalUsage)
-    const used = number(total.totalTokens ?? total.total_tokens ?? tokenUsage.totalTokens)
-    const contextWindow = number(tokenUsage.modelContextWindow ?? tokenUsage.model_context_window ?? params.modelContextWindow)
-    return contextWindow > 0 ? { contextPercent: Math.min(100, Math.round((used / contextWindow) * 100)) } : null
+    return contextUsage(params.tokenUsage ?? params.usage)
   }
   if (method.toLowerCase().includes('approval')) {
     const decisionRequest = method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval' || method.includes('execCommandApproval') || method.includes('applyPatchApproval')
@@ -389,20 +412,49 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   return { event: { ...normalized, state }, ...(method === 'item/started' || method === 'item/completed' ? { turn: { kind: 'activity' as const, turnId } } : {}) }
 }
 
-export async function loadBootstrap(): Promise<{ data: BootstrapPayload; connection: ConnectionState }> {
-  try { return { data: normalizeBootstrap(await request<unknown>('/bootstrap')), connection: 'online' } }
-  catch { return { data: demoBootstrap, connection: 'demo' } }
+export async function loadBootstrap(signal?: AbortSignal): Promise<{ data: BootstrapPayload; connection: ConnectionState }> {
+  const raw = await request<unknown>('/bootstrap', { signal })
+  const shell = object(raw)
+  if (typeof object(shell.health).codex_available !== 'boolean' || !Array.isArray(shell.projects)) throw new ApiError(502, 'The local service returned invalid workspace data.')
+  return { data: normalizeBootstrap(raw), connection: object(shell.health).codex_available === false ? 'offline' : 'online' }
+}
+
+export async function loadConversations(signal?: AbortSignal): Promise<Conversation[]> {
+  const result = await request<unknown>('/threads?limit=25', { signal })
+  if (object(result).degraded === true) throw new ApiError(503, 'Conversations are unavailable while the local Codex service is offline.')
+  if (!Array.isArray(object(result).data)) throw new ApiError(502, 'The local service returned invalid conversation data.')
+  return array(object(result).data).map(thread => normalizeConversation(thread))
+}
+
+export async function loadOptionalMetadata(signal?: AbortSignal): Promise<Partial<BootstrapPayload>> {
+  const [models, usage] = await Promise.allSettled([request<unknown>('/models', { signal }), request<unknown>('/usage', { signal })])
+  const result: Partial<BootstrapPayload> = {}
+  if (models.status === 'fulfilled') {
+    const available = array(object(models.value).data).map(model => text(object(model).id ?? object(model).model)).filter(Boolean)
+    if (available.length) result.models = available
+  }
+  if (usage.status === 'fulfilled') result.usage = normalizeUsage(usage.value, 0)
+  return result
+}
+
+export async function loadPlugins(cwd: string, signal?: AbortSignal): Promise<Plugin[]> {
+  const result = await request<unknown>(`/plugins?cwd=${encodeURIComponent(cwd)}`, { signal })
+  if (!Array.isArray(object(result).data)) throw new Error('Invalid plugin catalog')
+  return array(object(result).data).flatMap(raw => {
+    const plugin = object(raw)
+    return typeof plugin.id === 'string' && typeof plugin.name === 'string' && typeof plugin.displayName === 'string' && typeof plugin.description === 'string' ? [plugin as unknown as Plugin] : []
+  })
 }
 
 export async function loadEvents(conversationId: string, demoMode = false): Promise<StreamEvent[]> {
   return (await loadConversationSnapshot(conversationId, demoMode)).events
 }
 
-export async function loadConversationSnapshot(conversationId: string, demoMode = false): Promise<ConversationSnapshot> {
+export async function loadConversationSnapshot(conversationId: string, demoMode = false, signal?: AbortSignal): Promise<ConversationSnapshot> {
   try {
-    const thread = await request<unknown>(`/threads/${encodeURIComponent(conversationId)}`)
+    const thread = await request<unknown>(`/threads/${encodeURIComponent(conversationId)}`, { signal })
     let approvals: StreamEvent[] = []
-    try { approvals = pendingApprovals(await request<unknown>('/approvals'), conversationId) } catch { /* History remains authoritative if approval hydration fails. */ }
+    try { approvals = pendingApprovals(await request<unknown>('/approvals', { signal }), conversationId) } catch { /* History remains authoritative if approval hydration fails. */ }
     return { events: [...eventsFromThread(thread), ...approvals], turn: normalizeThreadLifecycle(thread) }
   }
   catch (error) {
@@ -448,11 +500,11 @@ export interface RoutingDecision {
 }
 export type RoutingStage = 'routing' | 'switching' | 'sending'
 
-export async function sendPrompt(conversationId: string, prompt: string, onProgress?: (stage: RoutingStage, decision?: RoutingDecision) => void, signal?: AbortSignal): Promise<{ turnId?: string; decision: RoutingDecision }> {
+export async function sendPrompt(conversationId: string, prompt: string, onProgress?: (stage: RoutingStage, decision?: RoutingDecision) => void, signal?: AbortSignal, plugins: string[] = []): Promise<{ turnId?: string; decision: RoutingDecision }> {
   signal?.throwIfAborted()
   onProgress?.('routing')
   const response = await fetchResponse(`/threads/${encodeURIComponent(conversationId)}/messages`, {
-    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: JSON.stringify({ input: prompt }), signal,
+    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: JSON.stringify({ input: prompt, ...(plugins.length ? { plugins } : {}) }), signal,
   })
   let stage: RoutingStage = 'routing'
   let final: { turnId?: string; decision: RoutingDecision } | undefined

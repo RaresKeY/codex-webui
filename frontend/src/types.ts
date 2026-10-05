@@ -1,6 +1,6 @@
 export type View = 'chat' | 'projects' | 'schedules' | 'images' | 'settings'
 export type ConnectionState = 'connecting' | 'online' | 'demo' | 'offline'
-export type EventKind = 'message' | 'reasoning' | 'command' | 'file' | 'approval' | 'status'
+export type EventKind = 'message' | 'image' | 'reasoning' | 'command' | 'file' | 'approval' | 'status'
 export type VoiceState = 'idle' | 'connecting' | 'live' | 'stopping' | 'error' | 'unsupported'
 export type TurnPhase = 'idle' | 'waiting' | 'streaming' | 'completed' | 'interrupted' | 'failed'
 
@@ -48,6 +48,20 @@ export interface Conversation {
   cwd: string
   model: string
   contextPercent: number
+  contextUsedTokens?: number
+  contextWindowTokens?: number
+}
+
+export interface MessageImage {
+  url: string
+  alt: string
+}
+
+export interface Plugin {
+  id: string
+  name: string
+  displayName: string
+  description: string
 }
 
 export interface StreamEvent {
@@ -60,6 +74,7 @@ export interface StreamEvent {
   state?: 'pending' | 'running' | 'done' | 'failed'
   meta?: Record<string, string | number | boolean>
   append?: boolean
+  images?: MessageImage[]
 }
 
 export interface WorkspaceFile {
@@ -141,6 +156,8 @@ export interface LiveUpdate {
   event?: StreamEvent
   turn?: TurnSignal
   contextPercent?: number
+  contextUsedTokens?: number
+  contextWindowTokens?: number
   conversationTitle?: string
   realtime?: RealtimeSignal
 }

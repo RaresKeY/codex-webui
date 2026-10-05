@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.codex_client import CodexAppServerClient, CodexRPCError, CodexUnavailable
+from app.codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, CodexUnavailable
+from types import SimpleNamespace
 
 
 @pytest.mark.asyncio
@@ -16,6 +17,37 @@ async def test_dispatch_correlates_response() -> None:
     client._pending[7] = future
     await client.dispatch_message({"id": 7, "result": {"ok": True}})
     assert await future == {"ok": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stall_write", [False, True])
+async def test_request_deadline_cleans_up_and_ignores_late_response(stall_write) -> None:
+    client = CodexAppServerClient(["codex", "app-server"], request_timeout=.02)
+    client.process = SimpleNamespace(returncode=None, stdin=True)
+    sent, futures = [], []
+    async def send(payload):
+        sent.append(payload)
+        futures.append(client._pending[payload["id"]])
+        if stall_write: await asyncio.Event().wait()
+    client._send = send
+    with pytest.raises(CodexTimeout):
+        await client.request("thread/list")
+    assert len(sent) == 1 and client._pending == {}
+    assert futures[0].cancelled()
+    await client.dispatch_message({"id": sent[0]["id"], "result": {"data": []}})
+    assert client._pending == {}
+
+
+@pytest.mark.asyncio
+async def test_cancelled_request_does_not_leave_a_pending_future() -> None:
+    client = CodexAppServerClient(["codex", "app-server"])
+    client.process = SimpleNamespace(returncode=None, stdin=True)
+    client._send = AsyncMock()
+    task = asyncio.create_task(client.request("thread/list"))
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError): await task
+    assert client._pending == {}
 
 
 @pytest.mark.asyncio

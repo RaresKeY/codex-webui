@@ -2,7 +2,7 @@
 
 A local Codex chat app with a quieter ChatGPT-style interface, succeeding WebUI 1 in [RaresKeY/codex-webui](https://github.com/RaresKeY/codex-webui). It retains native thread history, approvals, workspace tools, projects, schedules, images, and the experimental voice adapter. WebUI 1's tracked source and complete Git history are archived externally; its local checkout remains available as an archival reference.
 
-One sidebar, readable conversations, user message bubbles, a compact composer, and optional workspace tools keep chat central. Command output and public thought summaries expand on demand. Desktop navigation collapses; phone navigation and context use exclusive drawers.
+One sidebar, readable conversations, user message bubbles, a compact composer, and optional workspace tools keep chat central. Command output and public thought summaries expand on demand. Desktop navigation collapses; phone navigation and context use exclusive drawers. The shell opens while history loads, `@` offers installed plugins, images preview inline with click-to-zoom, and one activity indicator covers the message lifecycle. Hover the context ring for exact used/total/remaining token counts; unknown limits stay unavailable.
 
 The browser submits each text message once to the backend. After checking that the conversation is available, the backend enforces this order:
 

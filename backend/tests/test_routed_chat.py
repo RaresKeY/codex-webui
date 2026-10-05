@@ -39,10 +39,11 @@ def setup(client, monkeypatch, *, loaded=True, fail=None, decision=None):
     return calls
 
 
-@pytest.mark.parametrize("endpoint", ["messages", "turns"])
+@pytest.mark.parametrize("endpoint", ["messages", "turns", "compatibility"])
 def test_direct_chat_submission_always_routes_and_preserves_exact_input(client, monkeypatch, endpoint):
     calls = setup(client, monkeypatch)
-    response = client.post(f"/api/threads/one/{endpoint}", json={"input": ASK})
+    url = "/api/conversations/one/turns" if endpoint == "compatibility" else f"/api/threads/one/{endpoint}"
+    response = client.post(url, json={"input": ASK})
     assert response.status_code == 201
     assert response.json()["modelChangeAcknowledged"] is True
     assert [call[0] for call in calls] == ["thread/read", "jev", "thread/loaded/list", "thread/settings/update", "turn/start"]

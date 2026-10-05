@@ -65,8 +65,8 @@ describe('Codex 0.147 adapters', () => {
     })
     expect(notificationUpdate({
       method: 'thread/tokenUsage/updated',
-      params: { tokenUsage: { total: { totalTokens: 25 }, modelContextWindow: 100 } },
-    })).toEqual({ contextPercent: 25 })
+      params: { tokenUsage: { total: { totalTokens: 900 }, last: { totalTokens: 25 }, modelContextWindow: 100 } },
+    })).toEqual({ contextPercent: 25, contextUsedTokens: 25, contextWindowTokens: 100 })
   })
 
   it('maps authoritative turn lifecycle notifications separately from item progress', () => {

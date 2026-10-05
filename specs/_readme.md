@@ -5,6 +5,7 @@
 | Document | Status | Ground-truth ownership |
 | --- | --- | --- |
 | [jev_routing.md](jev_routing.md) | Backend-enforced text-chat path | V5 policy, typed decisions, acknowledged model change and exact user ask |
+| [chat_interactions.md](chat_interactions.md) | Implemented bounded chat subset | Progressive startup, plugin mentions, image previews, one activity indicator and context totals |
 | [product_scope.md](product_scope.md) | WebUI 2 | User roles, milestone surface, projects and chats |
 | [architecture.md](architecture.md) | Python companion + container | Components, boundaries, flow and source ownership |
 | [codex_app_server.md](codex_app_server.md) | Protocol subset + Jev ordering | Host Codex adapter, resumable sessions, approvals, and realtime |

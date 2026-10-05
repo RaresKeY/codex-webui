@@ -6,6 +6,8 @@ FastAPI/Python owns SQLite organization, bounded workspace access, the App Serve
 
 `Containerfile.tools` provides pinned Deno/Python tooling. `tools/frontend.py` installs integrity-checked locked tarballs in a non-root container and executes build/lint/tests offline with scoped permissions. `Containerfile` packages the checked frontend, locked Python dependencies and standalone Rust Codex binaries. `tools/run-container.sh` owns loopback startup and external mounts.
 
+Bootstrap serves local shell data without native RPCs; history/models/usage hydrate independently, with images/workspace files deferred to their surfaces. `plugins.py` resolves explicit composer selections against native installed metadata before Jev and appends validated mentions after the exact ask. Native requests and browser reads have deadlines and do not retry execution. See `chat_interactions.md` for the presentation and failure contracts.
+
 ## Gaps
 
 - Reconnect still hydrates authoritative history rather than replaying missed events.

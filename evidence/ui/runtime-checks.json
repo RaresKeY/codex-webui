@@ -1,0 +1,23 @@
+{
+  "healthy": true,
+  "image": "7fabc199e785847f2c00d7b4e3b61b2707a45f2319e356c490a56c85607add73",
+  "bootstrap_ms": [
+    13.22,
+    10.66,
+    20.23
+  ],
+  "installed_plugins": 13,
+  "workspace_preview": true,
+  "canonical_and_compatibility_bypass_validation": true,
+  "native_model_acknowledgements": true,
+  "paid_calls": 0,
+  "real_websocket_close_and_graceful_shutdown": true,
+  "live_browser": {
+    "production_container": true,
+    "shell_ms": 482.6,
+    "visible_installed_plugin_suggestions": 8,
+    "uncaught_javascript_errors": 0,
+    "read_only_no_submission": true
+  },
+  "websocket_graceful_shutdown_seconds": 0.165
+}

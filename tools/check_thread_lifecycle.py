@@ -24,6 +24,9 @@ def main():
         )
         with TestClient(create_app(settings)) as client:
             assert client.get("/api/health").json()["codex_available"]
+            plugins = client.get("/api/plugins")
+            assert plugins.status_code == 200, plugins.status_code
+            assert isinstance(plugins.json()["data"], list)
             response = client.post("/api/threads", json={"cwd": ".", "sandbox": "read-only"})
             assert response.status_code == 201, response.status_code
             thread = response.json()["thread"]
@@ -58,7 +61,7 @@ def main():
             assert observed[-2] == ("thread/settings/update", {"threadId": thread_id, "model": "gpt-6-luna", "effort": "low"})
             assert observed[-1][0] == "turn/start"
             assert observed[-1][1]["input"][0]["text"] == ask
-        print("Native offline lifecycle passed: legacy history, real model acknowledgements, synthetic routed submission with exact text.")
+        print("Native offline lifecycle passed: installed plugin discovery, legacy history, real model acknowledgements, synthetic routed submission with exact text.")
 
 
 if __name__ == "__main__":

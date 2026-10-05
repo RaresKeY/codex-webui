@@ -32,6 +32,8 @@ The installed schema also defines `thread/loaded/list` and `thread/settings/upda
 
 Required 0.147 sandbox-policy fields are preserved: read-only includes `networkAccess`; workspace-write includes `writableRoots`, `networkAccess`, `excludeTmpdirEnvVar`, and `excludeSlashTmp`.
 
+The installed 0.160.0 schema defines `plugin/installed` with `cwds`, marketplace entries containing installed/enabled/availability flags, and native `UserInput` mention entries. The packaged executable's plugin parser confirms canonical `plugin://name@marketplace` paths. General App Server documentation labels plugin APIs experimental; the adapter only reads installed metadata. `ImageGenerationItem.result/savedPath/failure`, image-view paths, user/tool image content and `ThreadTokenUsage.last/modelContextWindow` are inspected schema fields used by the frontend. Offline native discovery and fixture mention/image/context tests cover this subset without plugin execution or inference.
+
 The companion uses existing Codex environment/login resolution with externally mounted state in the container and never reads private auth layouts. It does not communicate with or patch the desktop app. The runtime feature argument does not persist configuration. `tools/smoke_app_server.py` uses an ephemeral read-only thread and a denied approval, then compares config digests.
 
 ## Gaps

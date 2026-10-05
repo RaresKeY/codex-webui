@@ -16,6 +16,10 @@ class CodexUnavailable(RuntimeError):
     pass
 
 
+class CodexTimeout(CodexUnavailable):
+    pass
+
+
 class CodexRPCError(RuntimeError):
     def __init__(self, error: Any):
         super().__init__(str(error))
@@ -55,6 +59,7 @@ class CodexAppServerClient:
         enabled: bool = True,
         line_limit: int = 32 * 1024 * 1024,
         experimental_api: bool = True,
+        request_timeout: float = 30,
     ) -> None:
         if line_limit < 1024:
             raise ValueError("line_limit must be at least 1024 bytes")
@@ -62,6 +67,7 @@ class CodexAppServerClient:
         self.enabled = enabled
         self.line_limit = line_limit
         self.experimental_api = experimental_api
+        self.request_timeout = request_timeout
         self.process: asyncio.subprocess.Process | None = None
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
@@ -151,10 +157,15 @@ class CodexAppServerClient:
         future = asyncio.get_running_loop().create_future()
         self._pending[request_id] = future
         try:
-            await self._send({"id": request_id, "method": method, "params": params or {}})
-            return await future
+            async with asyncio.timeout(self.request_timeout):
+                await self._send({"id": request_id, "method": method, "params": params or {}})
+                return await future
+        except TimeoutError:
+            raise CodexTimeout("Codex did not respond before the request deadline.") from None
         finally:
             self._pending.pop(request_id, None)
+            if not future.done():
+                future.cancel()
 
     async def notify(self, method: str, params: Any | None = None) -> None:
         await self._send({"method": method, "params": params or {}})

@@ -2,6 +2,8 @@ import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'rea
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy } from 'lucide-react'
+import { InlineImages } from './InlineImages'
+import { imageSource } from './images'
 
 function nodeText(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number' || typeof node === 'bigint') return String(node)
@@ -35,10 +37,11 @@ const components: Components = {
   a: ({ href, children, title }) => <a href={href} title={title} target="_blank" rel="noreferrer noopener">{children}</a>,
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   table: ({ children }) => <div className="markdown-table-wrap"><table>{children}</table></div>,
+  img: ({ src, alt }) => typeof src === 'string' && src ? <InlineImages images={[{ url: src, alt: alt || 'Image' }]} /> : <span>Image unavailable</span>,
 }
 
 export function MarkdownContent({ source, compact = false }: { source: string; compact?: boolean }) {
   return <div className={`markdown-content ${compact ? 'compact' : ''}`}>
-    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={defaultUrlTransform}>{source}</ReactMarkdown>
+    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url, key) => key === 'src' ? imageSource(url) ?? '' : defaultUrlTransform(url)}>{source}</ReactMarkdown>
   </div>
 }

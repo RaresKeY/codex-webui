@@ -84,6 +84,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("CODEX_WEBUI_CODEX_COMMAND", "CODEX_BIN"),
     )
     codex_enabled: bool = True
+    codex_request_timeout_seconds: float = Field(default=30, gt=0, le=120)
     jev_key_file: Path | None = None
     approval_policy: str = Field(
         default="on-request",

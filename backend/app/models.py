@@ -49,6 +49,14 @@ class TurnStart(BaseModel):
     input: str = Field(min_length=1, max_length=24_000)
     approval_policy: str | None = None
     sandbox: str | None = None
+    plugins: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("plugins")
+    @classmethod
+    def validate_plugins(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value) or any(not item or len(item) > 256 for item in value):
+            raise ValueError("plugins must contain unique bounded identifiers")
+        return value
 
     @field_validator("input")
     @classmethod
