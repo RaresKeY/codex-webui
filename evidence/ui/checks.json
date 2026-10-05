@@ -1,0 +1,29 @@
+{
+  "syntheticFixtures": true,
+  "desktop": {
+    "sidebar": 260,
+    "mainX": 260,
+    "composerWidth": 760,
+    "composerBottom": 955.5,
+    "overflow": false,
+    "font": "16px",
+    "commandsOpen": false,
+    "thoughtOpen": false
+  },
+  "phone": {
+    "width": 390,
+    "height": 844
+  },
+  "checks": [
+    "geometry",
+    "collapsed activity",
+    "context panel",
+    "ordered send",
+    "failed draft retained",
+    "phone no overflow",
+    "exclusive navigation",
+    "new chat",
+    "secondary page access"
+  ],
+  "uncaughtErrors": 0
+}
