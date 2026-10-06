@@ -261,6 +261,13 @@ interface ChatSurfaceProps {
 
 function ChatSurface({ onBranch, onOutputs, contextOpen, visible, conversation, project, projects, events, turn, historyLoading, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
   const [summaryOpen, setSummaryOpen] = useState(false)
+  useEffect(() => {
+    const narrow = matchMedia('(max-width: 1000px)')
+    const closeOnNarrow = () => { if (narrow.matches) setSummaryOpen(false) }
+    closeOnNarrow()
+    narrow.addEventListener('change', closeOnNarrow)
+    return () => narrow.removeEventListener('change', closeOnNarrow)
+  }, [])
   const summaryToggle = useRef<HTMLButtonElement>(null)
   const closeSummary = () => { setSummaryOpen(false); summaryToggle.current?.focus() }
   const feedRef = useRef<HTMLElement>(null)

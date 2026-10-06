@@ -170,14 +170,19 @@ def main():
                 bidi.command('input.performActions', {'context':context,'actions':[{'type':'pointer','id':'mouse','parameters':{'pointerType':'mouse'},'actions':[{'type':'pointerMove','origin':'viewport',**point}]}]})
                 wait("getComputedStyle(document.querySelector('.response-time')).opacity === '1'")
                 screenshot('desktop-hover-time.png')
+                alignment = evaluate("JSON.stringify(['.turn-work','.event-feed > .message.assistant','.composer-wrap'].map(s => {const r=document.querySelector(s).getBoundingClientRect();return [r.x,r.width]}))")
                 click('[aria-label="Sources and outputs"]')
                 wait("document.querySelector('.chat-summary') !== null")
                 assert evaluate("document.querySelectorAll('.chat-summary a').length === 1 && document.querySelector('.chat-summary').textContent.includes('report.md') && document.querySelector('.chat-summary a small').textContent === 'example.org'")
                 geometry = evaluate("(() => {const s=document.querySelector('.chat-summary').getBoundingClientRect(),m=document.querySelector('.event-feed > .message.assistant').getBoundingClientRect();return {summaryLeft:s.left,messageRight:m.right,overflow:document.documentElement.scrollWidth>innerWidth}})()")
-                assert not geometry['overflow'] and geometry['messageRight'] <= geometry['summaryLeft'], geometry
+                assert not geometry['overflow'], geometry
+                assert evaluate("JSON.stringify(['.turn-work','.event-feed > .message.assistant','.composer-wrap'].map(s => {const r=document.querySelector(s).getBoundingClientRect();return [r.x,r.width]}))") == alignment, 'Summary overlay changed chat alignment'
                 screenshot('desktop-summary.png')
                 for width,height in [(390,844),(320,640)]:
+                    viewport(1440,1000)
                     viewport(width,height)
+                    wait("!document.querySelector('.chat-summary') && document.querySelector('[aria-label=\"Sources and outputs\"]').getAttribute('aria-expanded') === 'false'")
+                    click('[aria-label="Sources and outputs"]')
                     wait("document.querySelector('.chat-summary') !== null")
                     assert evaluate("(() => {const r=document.querySelector('.chat-summary').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight && document.documentElement.scrollWidth<=innerWidth})()")
                     screenshot(f'phone-{width}-summary.png')

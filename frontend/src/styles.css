@@ -819,9 +819,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .response-time { margin-left: 4px; opacity: 0; color: var(--subtle); font-size: 11px; transition: opacity 150ms ease; }
 .message:hover .response-time, .message:focus-within .response-time { opacity: 1; }
 .branch-error { color: var(--danger); font-size: 12px; }
-@container (min-width: 1100px) {
-  .summary-open .event-feed, .summary-open .composer-wrap { padding-right: 320px; padding-left: max(24px, calc((100% - 320px - 760px) / 2)); }
-}
 @media (hover: none), (pointer: coarse) { .message-actions button { min-width: 40px; min-height: 44px; } .response-time { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .response-time { transition: none; } }
 .chat-summary button { border: 0; background: transparent; cursor: pointer; }
