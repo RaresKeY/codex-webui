@@ -779,13 +779,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .summary-view-all { min-height: 40px; font-size: 12px; color: var(--muted); }
 .summary-close { position: absolute; right: 4px; top: 4px; width: 32px; height: 32px; }
 .message-actions { align-items: center; gap: 2px; }
-.message-actions button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 36px; border-radius: 5px; }
+.message-actions button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-width: 28px; min-height: 28px; flex: 0 0 28px; padding: 0; border-radius: 5px; }
 .message-actions button:hover { background: var(--panel-hover); }
 .message-actions button:focus-visible { outline: 1px solid var(--line-focus); outline-offset: 1px; }
 .response-time { margin-left: 4px; opacity: 0; color: var(--subtle); font-size: 11px; transition: opacity 150ms ease; }
 .message:hover .response-time, .message:focus-within .response-time { opacity: 1; }
 .branch-error { color: var(--danger); font-size: 12px; }
-@media (hover: none), (pointer: coarse) { .message-actions button { min-width: 40px; min-height: 44px; } .response-time { opacity: 1; } }
+@media (hover: none), (pointer: coarse) { .message-actions button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex-basis: 44px; } .response-time { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .response-time { transition: none; } }
 .chat-summary button { border: 0; background: transparent; cursor: pointer; }
 .chat-summary .summary-close { width: 40px; height: 40px; top: 0; right: 0; }
