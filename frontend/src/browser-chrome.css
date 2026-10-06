@@ -1,0 +1,18 @@
+/* Browser chrome uses the app palette; every control maps to a supported action. */
+.browser-tab-strip { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px; border-bottom: 1px solid var(--line-soft); }
+.browser-tab { display: flex; align-items: center; gap: 7px; width: min(240px, 75%); min-width: 0; height: 32px; padding: 0 8px 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-raised); color: var(--text); }
+.browser-tab > svg { flex-shrink: 0; }
+.browser-tab > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.browser-tab button { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
+.browser-experimental { margin-left: auto; color: var(--subtle); font-size: 10px; }
+.browser-toolbar { display: flex; gap: 8px; align-items: center; padding: 7px 8px; border-bottom: 1px solid var(--line-soft); }
+.browser-navigation { display: flex; flex-shrink: 0; padding: 2px; border-radius: 20px; background: var(--panel-raised); }
+.browser-toolbar button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; }
+.browser-address-bar { display: flex; align-items: center; flex: 1; min-width: 0; height: 34px; padding: 2px 3px 2px 12px; border: 1px solid transparent; border-radius: 20px; background: var(--panel-raised); }
+.browser-address-bar:focus-within { border-color: var(--line-focus); }
+.browser-address-bar input { min-width: 0; flex: 1; width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
+.browser-address-bar input::placeholder { text-align: center; color: var(--subtle); }
+.browser-tab button:hover, .browser-toolbar button:hover { background: var(--panel-hover); }
+.browser-tab button:focus-visible, .browser-toolbar button:focus-visible { outline: 1px solid var(--line-focus); outline-offset: -1px; }
+.browser-tab button:disabled, .browser-toolbar button:disabled { opacity: .4; cursor: default; }
+@media (pointer: coarse) { .browser-tab { height: 44px; } .browser-tab button, .browser-toolbar button { width: 40px; height: 40px; } .browser-tab button { flex-basis: 40px; } .browser-address-bar { height: 44px; } }

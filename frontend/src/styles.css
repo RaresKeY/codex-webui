@@ -740,14 +740,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* Browser uses the existing context host, with more room for the page on desktop. */
 .app-shell.browser-open { --context-width: clamp(420px, 46vw, 940px); }
 .browser-context { min-height: 0; display: flex; flex-direction: column; background: var(--canvas); }
-.browser-tab { background: var(--canvas); display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
-.browser-tab > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 12px; }
-.browser-tab small { font-size: 10px; }
-.browser-tab button, .browser-toolbar button { min-width: 40px; height: 40px; display: grid; place-items: center; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
-.browser-tab button:hover, .browser-toolbar button:hover { background: var(--panel); border-color: var(--line); }
-.browser-tab button:disabled, .browser-toolbar button:disabled { opacity: .4; cursor: default; }
-.browser-toolbar { background: var(--canvas); display: flex; gap: 4px; align-items: center; padding: 8px; border-bottom: 1px solid var(--line-soft); }
-.browser-toolbar input { min-width: 0; flex: 1; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 20px; color: var(--text); background: var(--panel); font-size: 12px; }
 .browser-page { min-height: 0; flex: 1; overflow: auto; background: var(--canvas); }
 .browser-viewport { position: relative; width: 100%; overflow: hidden; }
 .browser-viewport img { display: block; width: 100%; height: 100%; object-fit: contain; }

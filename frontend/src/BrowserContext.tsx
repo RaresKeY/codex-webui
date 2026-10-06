@@ -1,6 +1,7 @@
+import './browser-chrome.css'
 import { browserAddress } from './browser-address'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, Globe, MousePointer2, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Globe, MousePointer2, RefreshCw, X } from 'lucide-react'
 
 export interface BrowserState {
   available: boolean
@@ -67,19 +68,19 @@ export function BrowserContext({ threadId, signal }: { threadId?: string; signal
   const cursor = currentSignal && currentSignal.revision >= (state?.revision ?? 0) ? currentSignal.cursor : state?.cursor
   const title = state?.title || 'New tab'
   return <section className="browser-context" id="context-tool-browser" role="tabpanel" aria-label="Browser">
-    <div className="browser-tab"><Globe size={14} /><span>{title}</span><small>Experimental</small><button aria-label="Close browser session" disabled={!state?.open || busy} onClick={() => { void act('close') }}><X size={15} /></button></div>
+    <div className="browser-tab-strip"><div className="browser-tab"><Globe size={13} /><span title={title}>{title}</span><button type="button" aria-label="Close browser session" disabled={!state?.open || busy} onClick={() => { void act('close') }}><X size={13} /></button></div><span className="browser-experimental">Experimental</span></div>
     <form className="browser-toolbar" onSubmit={navigate}>
-      <button type="button" aria-label="Browser back" disabled={!state?.open || busy} onClick={() => { void act('back') }}><ArrowLeft size={16} /></button>
-      <button type="button" aria-label="Reload browser page" disabled={!state?.open || busy} onClick={() => { void act('reload') }}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button>
-      <input aria-label="Browser address" type="text" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="Enter a website address" value={url ?? state?.url ?? ''} onChange={event => setUrl(event.target.value)} disabled={state?.available === false || busy} />
-      <button type="submit" disabled={!url?.trim() || busy || !state?.available}>Go</button>
+      <div className="browser-navigation"><button type="button" aria-label="Browser back" disabled={!state?.open || busy} onClick={() => { void act('back') }}><ArrowLeft size={16} /></button>
+      <button type="button" aria-label="Reload browser page" disabled={!state?.open || busy} onClick={() => { void act('reload') }}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button></div>
+      <div className="browser-address-bar"><input aria-label="Browser address" type="text" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="Enter a website or URL" value={url ?? state?.url ?? ''} onChange={event => setUrl(event.target.value)} disabled={state?.available === false || busy} />
+      <button type="submit" aria-label="Open website" title="Open website" disabled={!url?.trim() || busy || !state?.available}><ArrowUpRight size={16} /></button></div>
     </form>
     {(error || frameError) && <div className="browser-error" role="alert">{error || frameError}</div>}
     <div className="browser-page">
       {state?.open && state.frame ? <div className="browser-viewport" style={{ aspectRatio: `${state.width}/${state.height}` }}>
         <img src={`data:image/jpeg;base64,${state.frame}`} alt={`Live browser page: ${title}`} draggable={false} />
         {cursor && <div className={`browser-cursor ${cursor.click ? 'clicking' : ''}`} style={{ left: `${cursor.x / (state.width || 1280) * 100}%`, top: `${cursor.y / (state.height || 900) * 100}%` }} aria-label={cursor.click ? 'Agent clicking' : 'Agent cursor'}><MousePointer2 size={23} fill="currentColor" /><span>Codex</span></div>}
-      </div> : <div className="context-empty"><Globe size={28} /><strong>{state?.open ? 'Loading browser page…' : 'Browse alongside your chat'}</strong><span>{state?.available === false ? state.reason : state?.agentAvailable ? 'Enter an HTTPS address, or ask the agent to browse in a new chat. The browser opens here automatically.' : 'Enter an HTTPS address. Agent tools require the verified Codex CLI 0.160.1 runtime and a new chat.'}</span></div>}
+      </div> : <div className="context-empty"><Globe size={28} /><strong>{state?.open ? 'Loading browser page…' : 'New tab'}</strong><span>{state?.available === false ? state.reason : state?.agentAvailable ? 'Enter a website above or ask the agent to browse.' : 'Enter a website above to start browsing.'}</span></div>}
     </div>
     <footer className="browser-status"><span className={state?.open ? 'live' : ''} />{state?.open ? 'Live page · agent-controlled' : 'Jev browser'}<small>{state?.agentAvailable ? 'View only · agent tools in new chats' : 'View only · manual navigation'}</small></footer>
   </section>

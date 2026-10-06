@@ -9,7 +9,7 @@ Experimental Linux browser companion with an optional Unix-socket bridge for the
 - `backend/app/browser_service.py`: typed actions, thread ownership, serialization, bounded frame/observation projection and tool handler.
 - `backend/app/jev_browser/`: restricted Flatpak launch/audit, CDP pipe transport and repository-owned DOM observer, ported from Jev.
 - `backend/app/codex_client.py` and `main.py`: public dynamic-tool registration/dispatch, scoped events and browser HTTP routes.
-- `frontend/src/BrowserContext.tsx`, `App.tsx`, `api.ts`, and `styles.css`: live view, browser chrome, panel auto-open and cursor presentation.
+- `frontend/src/BrowserContext.tsx`, `App.tsx`, `api.ts`, `browser-chrome.css`, and `styles.css`: live view, browser chrome, panel auto-open and cursor presentation.
 - `backend/tests/test_browser.py`, `frontend/src/api.test.ts`, and `tools/smoke_browser.py`: adapter, isolation and real synthetic browser checks.
 
 ## Behavior
@@ -48,6 +48,8 @@ The visible Browser sits in the flush context region with square outer edges, a 
 Closing or switching away from a browser pane aborts its pending client action. A synchronous guard prevents duplicate actions, and generation checks discard frame responses predating a completed action. Event streams back off for one second on clean EOF as well as transport failure, avoiding a tight reconnect loop.
 
 The browser address bar accepts bare domains and protocol-relative addresses, adding HTTPS before submission. Explicit HTTP(S) protocols remain unchanged for backend validation; invalid or credential-bearing addresses are rejected. Native URL input validation cannot block bare-domain submission.
+
+Browser chrome lives in `browser-chrome.css`: an inset active tab, grouped back/reload controls and a rounded address field with an icon submit control. Long titles truncate, focus remains visible, and coarse-pointer controls enlarge. The empty tab directs users to the address field; browser controls expose only supported actions.
 
 ## Gaps
 

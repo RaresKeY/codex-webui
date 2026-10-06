@@ -229,6 +229,16 @@ def main():
                 evaluate("(() => {document.querySelector('.browser-toolbar').requestSubmit();return true})()")
                 wait("document.querySelector('[aria-label=\"Browser address\"]').value === 'https://duckduckgo.com/'")
                 assert JevFixtures.browser_actions == [{'action':'open','url':'https://duckduckgo.com/'}]
+                screenshot('desktop-browser-chrome.png')
+                for width,height in [(390,844),(320,640)]:
+                    viewport(width,height)
+                    wait("!document.querySelector('.context-panel')")
+                    click('[aria-label="Open context panel"]')
+                    wait("document.querySelector('.browser-address-bar') !== null")
+                    assert evaluate("(() => {const r=document.querySelector('.browser-toolbar').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && document.documentElement.scrollWidth<=innerWidth})()")
+                    screenshot(f'phone-{width}-browser-chrome.png')
+                    click('[aria-label="Close context panel"]')
+
                 errors = [event for event in bidi.events if event.get('method')=='log.entryAdded' and event.get('params',{}).get('type')=='javascript' and event.get('params',{}).get('level')=='error']
                 assert not errors, f'{len(errors)} uncaught JavaScript errors'
                 assert JevFixtures.calls == [], JevFixtures.calls
