@@ -63,6 +63,8 @@ The experimental branch is based on the preserved local WebUI theme, launch, ali
 
 `tools/check_jev_browser.py` checks the built UI at 1440×1000, 390×844 and 320×640: clicking a turn’s Jev step opens its run, stage flow/details, native-status read, older pagination, no five-second read while idle, direct event updates without refetch, chat isolation, error/reload and narrow fit. `tools/check_browser.py` checks the retained main chat UI at desktop/phone widths and exact-input submission with synthetic transport. Browser cursor and reduced-motion checks use an isolated real Chromium page. AMD64 image/runtime and native offline lifecycle are the deployment checks; ARM64 and paid end-to-end inference remain unverified.
 
+The resulting local-work image passed its packaged backend suite and native offline lifecycle check, then a separate candidate runtime verified Codex health, thread-scoped Jev reads, and a real host-browser action through the Unix socket. After replacement, certificate-validated private HTTPS served the exact built asset hashes, browser agent availability, and healthy Codex/database status. Same-origin activity WebSockets worked and foreign origins were rejected. The data volume and original rollback image were retained; no model inference, Git push or external upstream update was performed during the correction.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.
