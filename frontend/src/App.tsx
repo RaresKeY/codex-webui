@@ -3,11 +3,11 @@ import {
   Activity, Archive, AlertCircle, ArrowUp, Bot, Box, CalendarClock, Check, ChevronDown,
   ChevronRight, Circle, Clock3, Code2, Copy, Cpu, Database, Download, Edit3,
   File, FileCode2, FileJson, FileText, Files, Folder, FolderGit2, FolderOpen,
-  GitBranch, Image, Images, LayoutGrid, Menu, MessageSquareText, MoreHorizontal,
+  Globe, SlidersHorizontal, GitBranch, Image, Images, LayoutGrid, Menu, MessageSquareText, MoreHorizontal,
   PanelLeftOpen, PanelRightOpen, PanelRightClose, Play, Plus, RefreshCw, Save, Search,
   ShieldCheck, Sparkles, Terminal, Trash2, UserRound, Wifi, WifiOff, X,
 } from 'lucide-react'
-import { loadJevActivity, archiveConversation, restoreConversation, deleteConversation, deleteProject, connectChatActivity, readChatImageHistory, pinConversation, assignConversationProject, connectConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversations, loadOptionalMetadata, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
+import { forkConversation, loadJevActivity, archiveConversation, restoreConversation, deleteConversation, deleteProject, connectChatActivity, readChatImageHistory, pinConversation, assignConversationProject, connectConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversations, loadOptionalMetadata, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import type { RoutingDecision, RoutingStage } from './api'
 import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
 import { chatImageAssets, type ChatImageAsset } from './chat-images'
@@ -21,6 +21,8 @@ import { recoverChatActivity, reconcileChat, reduceChatActivity, type ChatActivi
 import { ConversationListItem } from './ConversationListItem'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
 import { groupEventFeed } from './event-groups'
+import { groupTurnFeed, isResponseBranchPoint, workLabel } from './chat-resources'
+import { ChatSummary } from './ChatSummary'
 import { BrowserContext, type BrowserSignal } from './BrowserContext'
 import { MarkdownContent } from './MarkdownContent'
 import type { ChatExecution } from './api'
@@ -139,7 +141,7 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
   </aside>
 }
 
-const eventIcons: Record<EventKind, ComponentType<{ size?: number }>> = { message: Bot, image: Image, reasoning: Sparkles, command: Terminal, file: FileCode2, approval: ShieldCheck, status: Activity }
+const eventIcons: Record<EventKind, ComponentType<{ size?: number }>> = { message: Bot, image: Image, reasoning: Sparkles, command: Terminal, file: FileCode2, approval: ShieldCheck, status: Activity, search: Globe }
 
 function EventState({ event }: { event: StreamEvent }) {
   return <span className={`event-state ${event.state}`}>{event.state}</span>
@@ -153,7 +155,7 @@ function CommandCard({ event }: { event: StreamEvent }) {
   const commandLine = event.content.split('\n').find(line => line.trim())?.trim() || event.title || 'Command'
   return <details className={`command-card ${event.state ?? ''}`}>
     <summary><ChevronRight size={13} className="disclosure-chevron" /><Terminal size={13} /><span><strong>{event.title ?? 'Command'}</strong><code>{commandLine}</code></span><EventState event={event} /><time>{event.timestamp}</time></summary>
-    <div className="command-card-body"><pre><code><span className="prompt">$</span> {event.content}</code></pre>{event.meta && <div className="event-meta">{Object.entries(event.meta).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}</div>
+    <div className="command-card-body"><pre><code><span className="prompt">$</span> {event.content}</code></pre>{event.meta && <div className="event-meta">{Object.entries(event.meta).filter(([key]) => !['turnId', 'turnStatus', 'turnDurationMs', 'startedAtMs', 'completedAtMs', 'phase'].includes(key)).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}</div>
   </details>
 }
 
@@ -175,8 +177,17 @@ function CommandGroup({ commands }: { commands: StreamEvent[] }) {
   </details>
 }
 
-function EventCard({ event, conversationId, cwd, fallbackModel, onApproval }: { event: StreamEvent; conversationId: string; cwd: string; fallbackModel: string; onApproval: (id: string, approved: boolean) => void }) {
+function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBranch }: { event: StreamEvent; conversationId: string; cwd: string; fallbackModel: string; onApproval: (id: string, approved: boolean) => void; onBranch?: (turnId: string) => Promise<void> }) {
   const [responding, setResponding] = useState(false)
+  const [branching, setBranching] = useState(false)
+  const [branchError, setBranchError] = useState('')
+  const branchGuard = useRef(false)
+  const branch = async () => {
+    if (!onBranch || branchGuard.current || typeof event.meta?.turnId !== 'string') return
+    branchGuard.current = true; setBranching(true); setBranchError('')
+    try { await onBranch(event.meta.turnId) } catch (error) { setBranchError(error instanceof Error ? error.message : 'Branch could not be created.') }
+    finally { branchGuard.current = false; setBranching(false) }
+  }
   const [approvalError, setApprovalError] = useState('')
   const answerApproval = (approved: boolean) => {
     if (responding) return
@@ -202,10 +213,12 @@ function EventCard({ event, conversationId, cwd, fallbackModel, onApproval }: { 
             : <div className={`message-rendered ${assistantRunning ? 'streaming' : ''}`} aria-live={assistantRunning ? 'polite' : undefined}><MarkdownContent source={event.content} cwd={cwd} /></div>
           : null}
         {!!event.images?.length && <InlineImages images={event.images} />}
-        {event.role !== 'user' && event.content && !assistantRunning && <div className="message-actions"><button onClick={() => void navigator.clipboard.writeText(event.content)}><Copy size={13} />Copy</button></div>}
+        {event.role !== 'user' && event.meta?.phase !== 'commentary' && (event.content || event.images?.length) && !assistantRunning && <div className="message-actions">{event.content && <button aria-label="Copy response" title="Copy response" onClick={() => void navigator.clipboard.writeText(event.content)}><Copy size={14} /></button>}{onBranch && event.meta?.phase !== 'commentary' && typeof event.meta?.turnId === 'string' && ['completed', 'interrupted', 'failed'].includes(String(event.meta?.turnStatus)) && <button aria-label="Branch chat from here" title="Branch chat from here" disabled={branching} onClick={() => void branch()}><GitBranch size={14} /></button>}{typeof event.meta?.completedAtMs === 'number' && Number.isFinite(event.meta.completedAtMs) && <time className="response-time" dateTime={new Date(event.meta.completedAtMs).toISOString()} title={new Date(event.meta.completedAtMs).toLocaleString()}>{new Date(event.meta.completedAtMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>}</div>}
+        {branchError && <p className="branch-error" role="alert">{branchError}</p>}
       </div>
     </article>
   }
+  if (event.kind === 'search') return <div className="search-step"><Globe size={15} /><span>Searched the web</span>{event.content && <small>{event.content}</small>}</div>
   if (event.kind === 'command') return <CommandCard event={event} />
   if (event.kind === 'reasoning' && !event.content) return null
   if (event.kind === 'reasoning') return <details className="reasoning-disclosure"><summary><Sparkles size={15} /><span>Thought summary</span><ChevronRight size={14} className="disclosure-chevron" /></summary><MarkdownContent source={event.content} compact cwd={cwd} /></details>
@@ -215,7 +228,7 @@ function EventCard({ event, conversationId, cwd, fallbackModel, onApproval }: { 
     <div className="event-content">
       <header><span>{event.title ?? event.kind}</span><EventState event={event} /><time>{event.timestamp}</time></header>
       <p className={event.kind === 'file' ? 'file-lines' : ''}>{event.content}</p>
-      {event.meta && <div className="event-meta">{Object.entries(event.meta).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}
+      {event.meta && <div className="event-meta">{Object.entries(event.meta).filter(([key]) => !['turnId', 'turnStatus', 'turnDurationMs', 'startedAtMs', 'completedAtMs', 'phase'].includes(key)).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}
       {event.kind === 'approval' && event.state === 'pending' && <>{approvalError && <p className="approval-error" role="alert">{approvalError}</p>}<div className="approval-actions">{!event.meta?.unsupported && <button className="button primary" disabled={responding} onClick={() => answerApproval(true)}><Check size={14} />{responding ? 'Sending…' : 'Allow once'}</button>}<button className="button" disabled={responding} onClick={() => answerApproval(false)}><X size={14} />{responding ? 'Sending…' : event.meta?.unsupported ? 'Cancel safely' : 'Deny'}</button></div></>}
     </div>
   </article>
@@ -244,10 +257,15 @@ interface ChatSurfaceProps {
   openRight: () => void
   contextOpen: boolean
   jevItems: JevActivity[]
+  onBranch: (turnId: string) => Promise<void>
+  onOutputs: () => void
   onOpenJev: (id: number) => void
 }
 
-function ChatSurface({ contextOpen, jevItems, onOpenJev, visible, conversation, project, projects, events, turn, historyLoading, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
+function ChatSurface({ onBranch, onOutputs, contextOpen, jevItems, onOpenJev, visible, conversation, project, projects, events, turn, historyLoading, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
+  const [summaryOpen, setSummaryOpen] = useState(false)
+  const summaryToggle = useRef<HTMLButtonElement>(null)
+  const closeSummary = () => { setSummaryOpen(false); summaryToggle.current?.focus() }
   const feedRef = useRef<HTMLElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -351,29 +369,34 @@ function ChatSurface({ contextOpen, jevItems, onOpenJev, visible, conversation, 
       if (mounted.current) setRoutingStage(null)
     }
   }
-  const feedEntries = groupEventFeed(jevTranscript(events, jevItems))
+  const feedEntries = groupTurnFeed(jevTranscript(events, jevItems))
   const latestReply = events.filter(event => event.role === 'assistant' && (event.kind === 'message' || event.kind === 'image')).at(-1)
   const recordedSelection = typeof latestReply?.meta?.model === 'string' && typeof latestReply.meta.effort === 'string'
     ? { model: latestReply.meta.model, effort: latestReply.meta.effort }
     : null
   const headerSelection = executionChoice && executionChoice.model !== 'auto' ? executionChoice : decision ?? recordedSelection ?? (conversation.lastTurnModel ? { model: conversation.lastTurnModel, effort: conversation.lastTurnEffort ?? 'unknown' } : null)
-  return <main hidden={!visible} className={`chat-surface ${events.length === 0 ? 'empty-chat' : ''} ${leftOpen ? '' : 'left-panel-closed'}`}>
+  return <main onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && summaryOpen && !contextOpen) { event.stopPropagation(); closeSummary() } }} hidden={!visible} className={`chat-surface ${events.length === 0 ? 'empty-chat' : ''} ${leftOpen ? '' : 'left-panel-closed'} ${summaryOpen && !contextOpen ? 'summary-open' : ''}`}>
     <header className="chat-header">
       <IconButton label={`${leftOpen ? 'Collapse' : 'Expand'} conversations`} onClick={toggleLeft}>{leftOpen ? <Menu size={18} /> : <PanelLeftOpen size={18} />}</IconButton>
       <div className="chat-heading">
         <div><StatusDot status={conversation.status} /><h2 className="conversation-title" onDoubleClick={openRename} title="Double-click to rename">{conversation.title}</h2><button type="button" className="rename-trigger" onClick={openRename} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></div>
         <span><FolderGit2 size={12} />{project?.name ?? 'No project'} · {conversation.cwd}</span>{renameError && !renaming && <small className="chat-name-error" role="alert">{renameError}</small>}
       </div>
-      <div className="chat-header-actions"><span className="chat-model-select" title={headerSelection ? `Model: ${headerSelection.model} · Reasoning effort: ${headerSelection.effort}. Change the chat selection with the speed control in the composer.` : 'Jev chooses model and effort for each message; change the chat selection with the speed control in the composer.'}><Sparkles size={14} /><span>{executionChoice && executionChoice.model !== 'auto' ? 'Manual' : 'Auto'}</span><strong>{headerSelection ? headerSelection.model.replace('gpt-', '') : 'Jev'}</strong>{headerSelection && <small className="chat-model-effort">· {headerSelection.effort}</small>}</span><label className="chat-project-select" title="Assign project"><FolderGit2 size={14} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project"><option value="">No project</option>{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label><ConnectionPill state={connection} /><button type="button" className="icon-button context-panel-toggle" hidden={contextOpen} aria-label="Open context panel" aria-expanded={contextOpen} aria-controls="context-pane" onClick={openRight}><PanelRightOpen size={18} /></button></div>
+      <div className="chat-header-actions"><span className="chat-model-select" title={headerSelection ? `Model: ${headerSelection.model} · Reasoning effort: ${headerSelection.effort}. Change the chat selection with the speed control in the composer.` : 'Jev chooses model and effort for each message; change the chat selection with the speed control in the composer.'}><Sparkles size={14} /><span>{executionChoice && executionChoice.model !== 'auto' ? 'Manual' : 'Auto'}</span><strong>{headerSelection ? headerSelection.model.replace('gpt-', '') : 'Jev'}</strong>{headerSelection && <small className="chat-model-effort">· {headerSelection.effort}</small>}</span><label className="chat-project-select" title="Assign project"><FolderGit2 size={14} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project"><option value="">No project</option>{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label><ConnectionPill state={connection} /><button type="button" ref={summaryToggle} className={`icon-button summary-toggle ${summaryOpen ? 'active' : ''}`} aria-label="Sources and outputs" aria-expanded={summaryOpen && !contextOpen} aria-controls="chat-summary" hidden={contextOpen} onClick={() => setSummaryOpen(value => !value)}><SlidersHorizontal size={18} /></button><button type="button" className="icon-button context-panel-toggle" hidden={contextOpen} aria-label="Open context panel" aria-expanded={contextOpen} aria-controls="context-pane" onClick={openRight}><PanelRightOpen size={18} /></button></div>
     </header>
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       {events.length === 0 && <div className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>A clear space to think, create, and get things done.</p><div className="welcome-hints"><span><Code2 size={16} />Build something</span><span><Search size={16} />Explore a project</span><span><Sparkles size={16} />Refine an idea</span></div></div>}
-      {feedEntries.map(entry => entry.type === 'commands'
-        ? <CommandGroup commands={entry.commands} key={entry.id} />
-        : entry.event.meta?.jevActivityId ? <JevTurnStep key={entry.event.id} item={jevItems.find(item => item.id === entry.event.meta?.jevActivityId)!} onOpen={() => onOpenJev(Number(entry.event.meta?.jevActivityId))} /> : <EventCard event={entry.event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
+      {feedEntries.map(entry => {
+        const renderEvent = (event: StreamEvent) => event.meta?.jevActivityId
+          ? <JevTurnStep key={event.id} item={jevItems.find(item => item.id === event.meta?.jevActivityId)!} onOpen={() => onOpenJev(Number(event.meta?.jevActivityId))} />
+          : <EventCard key={event.id} event={event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} onBranch={isResponseBranchPoint(events, event) ? onBranch : undefined} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: `${item.content}\n${approved ? 'Approved for this run.' : 'Denied.'}` } : item))} />
+        if (entry.type === 'event') return renderEvent(entry.event)
+        return <details className="turn-work" key={`work-${entry.id}`}><summary><span>{workLabel(entry.events, turnActive && turn.turnId === entry.id)}</span><ChevronRight size={14} className="disclosure-chevron" /></summary><div className="turn-work-items">{groupEventFeed(entry.events).map(item => item.type === 'commands' ? <CommandGroup key={item.id} commands={item.commands} /> : renderEvent(item.event))}</div></details>
+      })}
       {(routingStage || turnActive || historyLoading) && <div className="chat-progress" role="status" aria-live="polite"><RefreshCw size={14} className="spin" /><span>{routingStage === 'routing' ? 'Choosing the right model…' : routingStage === 'switching' ? `Switching to ${decision?.model}…` : routingStage === 'sending' ? 'Sending your message…' : turnActive ? turn.phase === 'streaming' ? 'Responding…' : 'Thinking…' : 'Loading conversation…'}</span></div>}
       <div ref={endRef} />
     </section>
+    {summaryOpen && !contextOpen && <ChatSummary events={events} onClose={closeSummary} onOutputs={onOutputs} />}
     <Composer conversation={conversation} cwd={conversation.cwd} threadId={conversation.id} busy={historyLoading || turnActive || routingStage !== null || voiceState === 'live' || voiceState === 'connecting'} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} onPermissionsChanging={setPermissionsBusy} permissionsBusy={permissionsBusy} onExecutionSelection={setExecutionChoice} lastModel={recordedSelection?.model ?? acceptedDecision?.model ?? conversation.lastTurnModel} lastEffort={recordedSelection?.effort ?? acceptedDecision?.effort ?? conversation.lastTurnEffort} manualExecution={Boolean(executionChoice && executionChoice.model !== "auto")} />
     {renaming && <Modal title="Rename conversation" description="Choose a concise name that will be easy to find later." onClose={closeRename}><form className="modal-form rename-modal-form" onSubmit={submitRename}><label>Conversation name<input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onFocus={event => event.currentTarget.select()} onKeyDown={event => { if (event.key === 'Escape') closeRename() }} aria-label="Conversation name" /></label>{renameError && <p className="modal-error" role="alert">{renameError}</p>}<footer><button type="button" className="button" disabled={savingName} onClick={closeRename}>Cancel</button><button className="button primary" disabled={!renameValue.trim() || savingName}>{savingName ? 'Saving…' : 'Save'}</button></footer></form></Modal>}
   </main>
@@ -409,13 +432,13 @@ const contextToolIcons: Record<ContextToolId, ComponentType<{ size?: number }>> 
 }
 
 function OutputsContext({ events }: { events: StreamEvent[] }) {
-  const outputs = events.filter(event => event.kind === 'command' || event.kind === 'file' || event.kind === 'approval' || event.kind === 'status').slice(-12).reverse()
+  const outputs = events.filter(event => event.kind === 'command' || event.kind === 'file' || event.kind === 'approval' || event.kind === 'status' || event.kind === 'image').slice(-12).reverse()
   return <section className="context-output-view" id="context-tool-outputs" role="tabpanel" aria-label="Outputs">
     <div className="context-section-heading"><div><span>Conversation activity</span><small>{outputs.length} recent items</small></div><Activity size={16} /></div>
     <div className="context-output-list">
       {outputs.map(event => {
         const Icon = eventIcons[event.kind]
-        return <article className="context-output-row" key={event.id}><span className={`context-output-icon ${event.kind}`}><Icon size={14} /></span><div><strong>{event.title ?? event.kind}</strong><p>{event.content}</p><small>{event.timestamp}{event.state ? ` · ${event.state}` : ''}</small></div></article>
+        return <article className="context-output-row" key={event.id}><span className={`context-output-icon ${event.kind}`}><Icon size={14} /></span><div><strong>{event.title ?? event.kind}</strong><p>{event.content}</p>{!!event.images?.length && <InlineImages images={event.images} />}<small>{event.timestamp}{event.state ? ` · ${event.state}` : ''}</small></div></article>
       })}
       {!outputs.length && <div className="context-empty"><Activity size={24} /><strong>No outputs yet</strong><span>Command, file, status, and approval activity will appear here.</span></div>}
     </div>
@@ -931,6 +954,10 @@ export default function App() {
         if (!selectionPending) activeEffortRef.current = undefined
         selectionPending = false
       }
+      if (update.turnInfo) {
+        const info = update.turnInfo
+        setEvents(current => current.map(event => event.meta?.turnId === info.turnId ? { ...event, meta: { ...event.meta, ...info.meta } } : event))
+      }
       if (update.event) {
         const model = activeModelRef.current, effort = activeEffortRef.current
         setEvents(current => stampAssistantMessageModel(mergeStreamEvent(current, update.event!), model, effort))
@@ -1089,7 +1116,7 @@ export default function App() {
     {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { if (tool === 'jev' && activeId) showView('chat'); setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={closeLeft} />
     <div className="content-area" inert={leftOpen && isNarrowLayout() ? true : undefined}>
-      {activeConversation && <ChatSurface contextOpen={rightOpen} jevItems={jevByChat[activeConversation.id]?.items ?? []} onOpenJev={id => { setSelectedJevByChat(current => ({ ...current, [activeConversation.id]: id })); setActiveContextTool('jev'); openRight() }} visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
+      {activeConversation && <ChatSurface onBranch={async turnId => { const fork = await forkConversation(activeConversation.id, turnId); selectConversation(fork) }} onOutputs={() => { setActiveContextTool('outputs'); openRight() }} contextOpen={rightOpen} jevItems={jevByChat[activeConversation.id]?.items ?? []} onOpenJev={id => { setSelectedJevByChat(current => ({ ...current, [activeConversation.id]: id })); setActiveContextTool('jev'); openRight() }} visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
       {view === 'chat' && !activeConversation && <main className="chat-surface"><header className="chat-header"><IconButton label="Expand conversations" onClick={openLeft}><Menu size={20} /></IconButton><span>Codex 2</span><ConnectionPill state={connection} /></header><section className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>Start a conversation in your local workspace.</p><button className="button primary start-chat" onClick={newChat}><Edit3 size={17} />New chat</button></section></main>}
       <LaunchPad visible={view === 'new' || view === 'projects'} projectMode={view === 'projects'} selectedProjectId={data.projects.some(project => project.id === launchProjectId) ? launchProjectId : data.projects[0]?.id} projectControls={view === 'projects' ? <ProjectsPage onDelete={project => askDelete({ project })} createRequest={projectCreationRequest} projects={data.projects} conversations={data.conversations} selectedId={launchProjectId || data.projects[0]?.id || ''} onSelect={setLaunchProjectId} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} /> : undefined} onSent={(id, model, effort) => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id ? { ...chat, lastTurnModel: model, lastTurnEffort: effort, model } : chat) } : current)} chats={data.conversations} projects={data.projects} onMenu={openLeft} leftOpen={leftOpen} onSelect={selectConversation} onCreated={chat => { activityRevision.current++; preparing.current.add(chat.id); setData(current => current ? { ...current, conversations: [chat, ...current.conversations.filter(item => item.id !== chat.id)] } : current) }} onPrepared={id => { activityRevision.current++; preparing.current.delete(id) }} onFailed={id => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id && chat.status === 'running' ? { ...chat, status: 'failed' } : chat) } : current)} />
       {view === 'new' && !activityConnected && <p className="launch-connection" role="status">Activity connection is reconnecting. Status may be delayed.</p>}

@@ -60,6 +60,8 @@ On the experimental branch, Browser is an implemented bounded live screenshot co
 
 The open panel is a flush rectangular app region: no outer gap, radius or floating shadow, with a single neutral divider from the conversation. Its compact header aligns with the chat header; neutral tool tabs share the existing palette. The closed state has a 40px top-right pane control. Opening moves that control into the pane header; Escape or closing restores focus to the conversation control. Narrow layouts use an edge-attached full-height pane rather than an inset rounded card.
 
+See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
+
 ## Gaps
 
 - No public standalone Browser control is available.

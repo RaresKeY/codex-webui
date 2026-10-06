@@ -12,6 +12,8 @@ Source: `backend/app/main.py`, `backend/app/database.py`, `frontend/src/App.tsx`
 
 Verification: `backend/tests/test_chat_lifecycle.py`, frontend notification tests, `tools/check_thread_lifecycle.py` with a disposable offline Codex home, and `tools/check_chat_management_browser.py` with synthetic browser data. The native contract is documented at https://learn.chatgpt.com/docs/app-server.
 
+See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
+
 ## Gaps
 
 - Native lifecycle operations require native persisted/managed threads; unsupported or rejected native operations show an error rather than pretending to succeed.

@@ -12,8 +12,10 @@ Per-chat permission preferences use bounded string values in the existing `setti
 
 `chat-execution:<thread-id>` stores the explicitly selected Auto/manual model and effort. `new-chat-permissions` records the latest acknowledged explicit permission choice in the same transaction as its per-chat preset. Creation snapshots that preset into the new chat after native creation succeeds; later choices do not mutate existing chats. Model/effort selection defaults to Auto for each new chat and does not inherit.
 
+See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
+
 ## Gaps
 
 - Add versioned migrations, backup/rollback, busy timeout, indexes, retention, and corruption recovery.
-- Selection rows have no automatic pruning or fork copying; older/native external turns lack recorded effort.
+- Selection rows have no automatic pruning; older/native external turns lack recorded effort.
 - Add first-class execution/image records only when their lifecycle is implemented; do not duplicate Codex authority casually.

@@ -44,11 +44,13 @@ The composer also offers a shield for per-chat permissions and a speedometer for
 
 The context ring is in the composer immediately before the execution/model control. Hover, focus or tap opens a small tooltip above it with context-window percentage used/left and compact used/total tokens. Exact totals remain in the accessible label; unknown usage/limits stay explicit. Escape/blur closes it. A body portal and clamped viewport coordinates keep it visible on narrow screens; context remains based on the latest native context total. Header context duplication is removed.
 
+See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
+
 ## Gaps
 
 - Catalog/input APIs use the installed 0.160.0 schema; real skill/plugin/app execution and paid model transports remain unverified. Explicit selections are revalidated, but manually typed native `$` syntax can still be interpreted by Codex itself.
 - This menu covers supported skill/plugin/app/file references, not every CLI slash command, configuration control, MCP elicitation or attachment flow.
-- Old/native external turns lack recorded effort; metadata retention and fork copying are not implemented.
+- Old/native external turns lack recorded effort; automatic metadata retention is not implemented.
 - Image file IDs alone, remote images, image attachment sending, full decode/dimension limits and importing generated previews into the library remain outside this subset.
 - Native thread history does not restore token-usage totals; reopened chats show unknown context until a notification arrives.
 - Browser evidence uses Firefox fixtures and does not claim a full accessibility audit or live microphone coverage.

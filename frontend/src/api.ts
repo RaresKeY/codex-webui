@@ -1,5 +1,6 @@
 import { demoEvents, demoFileContents } from './demo'
 import { contentImages, imageSource } from './images'
+import { safeWebsite } from './chat-resources'
 import { contextUsage } from './context-usage'
 import { UNTITLED_CONVERSATION } from './conversation-title'
 import type { RealtimeVoice, RealtimeVoicesList, WebRtcRealtimeVersion } from './app-server-protocol'
@@ -306,7 +307,15 @@ export function normalizeItem(raw: unknown, index: number): StreamEvent | null {
   const timestamp = timeLabel(item.timestamp ?? item.createdAt ?? item.created_at)
   const state = item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : item.status ? 'done' : undefined
   if (type.includes('user')) return { id, kind: 'message', role: 'user', content: contentText(item.content ?? item.message ?? item.input), timestamp, state, images: contentImages(item.content ?? item.input) }
-  if (type.includes('agent') || type.includes('assistant') || type === 'message') return { id, kind: 'message', role: 'assistant', content: contentText(item.text ?? item.content ?? item.message ?? item.output), timestamp, state, images: contentImages(item.content ?? item.output) }
+  if (type.includes('agent') || type.includes('assistant') || type === 'message') return { id, kind: 'message', role: 'assistant', content: contentText(item.text ?? item.content ?? item.message ?? item.output), timestamp, state, meta: typeof item.phase === 'string' ? { phase: item.phase } : undefined, images: contentImages(item.content ?? item.output) }
+  if (type === 'websearch') {
+    const action = object(item.action)
+    const sources = [...array(item.results), ...(action.url ? [{ url: action.url }] : [])].slice(0, 100).flatMap(value => {
+      const result = object(value), url = safeWebsite(result.url)
+      return url ? [{ url, title: text(result.title, new URL(url).hostname).slice(0, 300) }] : []
+    })
+    return { id, kind: 'search', title: 'Searched the web', content: text(item.query), timestamp, state, sources }
+  }
   if (type === 'plan' || type.includes('plan')) return { id, kind: 'reasoning', title: 'Plan', content: contentText(item.text ?? item.content), timestamp, state: state ?? 'done' }
   if (type.includes('reason')) return { id, kind: 'reasoning', title: 'Reasoning summary', content: contentText(item.summary), timestamp, state: state ?? 'done' }
   if (type === 'imagegeneration' || type === 'imageview') {
@@ -324,7 +333,7 @@ export function normalizeItem(raw: unknown, index: number): StreamEvent | null {
     const output = contentText(item.aggregatedOutput)
     return { id, kind: 'command', title: text(item.name, 'Command'), content: [command, output].filter(Boolean).join('\n'), timestamp, state: item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : 'done', meta: { ...(typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {}), ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}) } }
   }
-  if (type.includes('file') || type.includes('patch') || type.includes('diff')) return { id, kind: 'file', title: text(item.name, 'Workspace changes'), content: fileChangesText(item.changes) || contentText(item.path ?? item.content), timestamp, state: item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : 'done' }
+  if (type.includes('file') || type.includes('patch') || type.includes('diff')) return { id, kind: 'file', title: text(item.name, 'Workspace changes'), outputPaths: array(item.changes).map(change => text(object(change).path)).filter(Boolean).slice(0, 100), content: fileChangesText(item.changes) || contentText(item.path ?? item.content), timestamp, state: item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : 'done' }
   return null
 }
 
@@ -335,7 +344,7 @@ function eventsFromThread(raw: unknown): StreamEvent[] {
     const record = object(turn)
     return array(record.items ?? record.events ?? record.messages).map((item, itemIndex) => {
       const event = normalizeItem(item, turnIndex * 1000 + itemIndex)
-      if (event && text(record.id)) event.meta = { ...event.meta, turnId: text(record.id) }
+      if (event && text(record.id)) event.meta = { ...event.meta, turnId: text(record.id), ...turnMetadata(record) }
       const selection = object(record.webui)
       if (event && event.role === 'assistant' && text(selection.model)) event.meta = { ...event.meta, model: text(selection.model), ...(text(selection.effort) ? { effort: text(selection.effort) } : {}) }
       return event
@@ -394,6 +403,7 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   const update = nativeNotificationUpdate(raw, realtimeTranscriptId)
   const turnId = text(params.turnId ?? object(params.turn).id)
   if (update?.event && turnId) update.event.meta = { ...update.event.meta, turnId }
+  if (update && turnId && ['turn/started', 'turn/completed'].includes(text(root.method))) update.turnInfo = { turnId, meta: turnMetadata(object(params.turn)) }
   return update
 }
 
@@ -867,4 +877,23 @@ export function connectChatActivity(onActivity: (threadId: string, update: LiveU
   }
   open()
   return () => { stopped = true; if (timer !== undefined) clearTimeout(timer); socket?.close() }
+}
+
+
+function turnMetadata(turn: JsonObject): Record<string, string | number | boolean> {
+  return {
+    ...(typeof turn.durationMs === 'number' && Number.isFinite(turn.durationMs) && turn.durationMs >= 0 ? { turnDurationMs: turn.durationMs } : {}),
+    ...(typeof turn.completedAt === 'number' && Number.isFinite(turn.completedAt) && turn.completedAt > 0 && turn.completedAt <= 8640000000000 ? { completedAtMs: turn.completedAt * 1000 } : {}),
+    ...(typeof turn.startedAt === 'number' && Number.isFinite(turn.startedAt) && turn.startedAt > 0 && turn.startedAt <= 8640000000000 ? { startedAtMs: turn.startedAt * 1000 } : {}),
+    ...(typeof turn.status === 'string' ? { turnStatus: turn.status } : {}),
+  }
+}
+
+export async function forkConversation(id: string, turnId: string): Promise<Conversation> {
+  const raw = await request(`/threads/${encodeURIComponent(id)}/fork`, { method: 'POST', body: JSON.stringify({ turn_id: turnId }) })
+  const thread = object(object(raw).thread)
+  if (typeof thread.id !== 'string' || !thread.id || thread.id === id) throw new Error('Branch was not confirmed. Refresh chats before trying again.')
+  const conversation = normalizeConversation(raw)
+  if (!conversation.id || conversation.id === id) throw new Error('Branch was not confirmed. Refresh chats before trying again.')
+  return conversation
 }

@@ -72,7 +72,7 @@ describe('Codex 0.147 adapters', () => {
   it('maps authoritative turn lifecycle notifications separately from item progress', () => {
     expect(notificationUpdate({
       method: 'turn/started', params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'inProgress' } },
-    })).toEqual({ turn: { kind: 'started', turnId: 'turn-1' } })
+    })).toMatchObject({ turn: { kind: 'started', turnId: 'turn-1' } })
     expect(notificationUpdate({
       method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'a1', delta: 'Hi' },
     })).toMatchObject({ turn: { kind: 'delta', turnId: 'turn-1' }, event: { state: 'running', append: true } })
@@ -81,7 +81,7 @@ describe('Codex 0.147 adapters', () => {
     })).toEqual({ turn: { kind: 'error', turnId: 'turn-1', message: 'temporary', willRetry: true } })
     expect(notificationUpdate({
       method: 'turn/completed', params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'interrupted', error: null } },
-    })).toEqual({ turn: { kind: 'completed', turnId: 'turn-1', status: 'interrupted', error: undefined } })
+    })).toMatchObject({ turn: { kind: 'completed', turnId: 'turn-1', status: 'interrupted', error: undefined } })
   })
 
   it('restores waiting and streaming lifecycle from authoritative thread history', () => {

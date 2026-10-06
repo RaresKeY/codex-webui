@@ -43,6 +43,7 @@ from .models import (
     ScheduledTaskUpdate,
     SettingValue,
     ThreadName,
+    ThreadFork,
     ThreadResume,
     ThreadStart,
     TurnStart,
@@ -535,8 +536,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await mutate_thread_lifecycle(thread_id, "thread/delete")
 
     @app.post("/api/threads/{thread_id}/fork", status_code=201)
-    async def fork_thread(thread_id: str) -> Any:
-        return await codex.request("thread/fork", {"threadId": thread_id})
+    async def fork_thread(thread_id: str, body: ThreadFork | None = None) -> Any:
+        params: dict[str, Any] = {"threadId": thread_id, "deferGoalContinuation": True}
+        if body is None:
+            return await codex.request("thread/fork", params)
+        if codex.cli_version != "codex-cli 0.160.1":
+            raise MessageError(503, "Branching from a response requires the verified Codex 0.160.1 runtime.")
+        async with chat.reserve(thread_id):
+            result = await codex.request("thread/read", {"threadId": thread_id, "includeTurns": True})
+            source = result.get("thread", {}) if isinstance(result, dict) else {}
+            if not isinstance(source, dict) or source.get("id") != thread_id:
+                raise MessageError(502, "Codex could not confirm the source chat.")
+            target = next((turn for turn in source.get("turns", []) if isinstance(turn, dict) and turn.get("id") == body.turn_id), None)
+            if not target:
+                raise MessageError(404, "This response's turn is no longer available.")
+            if target.get("status") not in {"completed", "interrupted", "failed"}:
+                raise MessageError(409, "Wait for this response's turn to finish before branching.")
+            if not isinstance(source.get("cwd"), str) or not source["cwd"]:
+                raise MessageError(400, "This chat workspace is unavailable for branching.")
+            try:
+                workspace.resolve(source["cwd"], must_exist=True)
+            except (UnsafePath, FileNotFoundError) as exc:
+                raise MessageError(400, "This chat workspace is unavailable for branching.") from exc
+            params["lastTurnId"] = body.turn_id
+            result = await codex.request("thread/fork", params)
+            fork = result.get("thread", {}) if isinstance(result, dict) else {}
+            new_id = fork.get("id") if isinstance(fork, dict) else None
+            if not isinstance(new_id, str) or not new_id or new_id == thread_id:
+                raise MessageError(502, "Codex could not confirm the branch. Refresh chats before trying again.")
+            # Optional organizational metadata must never invalidate a native fork acknowledgement.
+            result["metadataSaved"] = False
+            try:
+                metadata = (await db.all_chat_metadata()).get(thread_id, {})
+                await db.set_chat_metadata(new_id, metadata.get("project_id"), False)
+                selections = await db.turn_selections(thread_id)
+                for turn in fork.get("turns", []):
+                    selection = selections.get(turn.get("id")) if isinstance(turn, dict) else None
+                    if selection:
+                        await db.record_turn_selection(new_id, turn["id"], selection["model"], selection["effort"])
+                for preference in ("chat-permissions", "chat-execution"):
+                    value = await db.get_setting(f"{preference}:{thread_id}")
+                    if value is not None:
+                        await db.set_setting(f"{preference}:{new_id}", value)
+                fork["webui"] = {"project_id": metadata.get("project_id"), "pinned": 0}
+                result["metadataSaved"] = True
+            except (sqlite3.Error, OSError):
+                pass
+            return result
 
     @app.patch("/api/threads/{thread_id}/metadata")
     async def set_thread_metadata(thread_id: str, body: ChatMetadataUpdate) -> dict[str, Any]:

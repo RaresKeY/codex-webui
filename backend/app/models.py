@@ -171,3 +171,8 @@ class ScheduledTaskUpdate(BaseModel):
 
 class FileWrite(BaseModel):
     content: str
+
+
+class ThreadFork(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    turn_id: str = Field(min_length=1, max_length=200)

@@ -69,6 +69,14 @@ The resulting local-work image passed its packaged backend suite and native offl
 
 Matched synthetic captures compare the deployed local-work bundle with the new pane at 1440×1000, 390×844 and 320×640. `tools/check_jev_browser.py` asserts exact edge attachment, zero outer margins/radii/shadows, alignment with the conversation edge, the closed 40px header control, Escape closing and restored focus. Jev process, pagination, event updates and chat isolation retain their checks. Pane chrome and Jev rows consume existing neutral theme tokens. The same browser regression covers automatic selection/opening, scaled cursor movement and reduced-motion behavior. No data/protocol migration or paid inference is involved.
 
+## Sources, turn work and response branching
+
+The local runtime candidate `2edbdc93a1ffd731a5cbc3ce4667d4df8e5461a6797c408f0cb859a31737a127` passed 198 backend tests, 102 frontend tests, type checking, lint, production build and the offline native lifecycle runner. `tools/check_turn_browser.py` verifies collapsed/expanded native-phase work, final answers outside the disclosure, deduplicated website resources and file outputs, hover timestamps, desktop side space and narrow card bounds, duplicate-click prevention, visible branch errors and exact retained older-turn history. The fixture explicitly provides a hover-capable desktop pointer; touch CSS keeps response timestamps discoverable without hover. Captures and a bounded report are under `evidence/ui/turn-presentation/`.
+
+Core browser regression passed at 1440×1000 and 390×844, including one routed synthetic submission and exact whitespace. Jev browser regression passed at desktop, 390×844 and 320×640, preserving native process links, no polling, event-driven stages, chat isolation and the flush context pane. No paid Jev/Codex call was executed. The installed 0.160.1 schema and adapter fixtures cover inclusive `lastTurnId` and deferred goals; a paid real completed-turn fork remains unverified.
+
+The image was deployed through the owning rootless wrapper to the existing private Tailscale URL. HTTPS health, connected Codex/browser availability, exact built HTML/assets, strict fork request schema and same-origin WebSocket success/foreign-origin rejection were checked. No active native chats were reported before the short restart. Existing data/credential mounts and the pre-change `before-turn-ui` rollback image were preserved; no remote fetch, push or upstream update occurred. Generated local frontend build files are removed after verification.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

@@ -1,6 +1,6 @@
 export type View = 'new' | 'chat' | 'archived' | 'projects' | 'schedules' | 'images' | 'settings'
 export type ConnectionState = 'connecting' | 'online' | 'demo' | 'offline'
-export type EventKind = 'message' | 'image' | 'reasoning' | 'command' | 'file' | 'approval' | 'status'
+export type EventKind = 'message' | 'image' | 'reasoning' | 'command' | 'file' | 'approval' | 'status' | 'search'
 export type VoiceState = 'idle' | 'connecting' | 'live' | 'stopping' | 'error' | 'unsupported'
 export type PermissionMode = 'default' | 'full-auto' | 'yolo'
 export type TurnPhase = 'idle' | 'waiting' | 'streaming' | 'completed' | 'interrupted' | 'failed'
@@ -85,6 +85,8 @@ export interface StreamEvent {
   state?: 'pending' | 'running' | 'done' | 'failed'
   meta?: Record<string, string | number | boolean>
   append?: boolean
+  sources?: { url: string; title: string }[]
+  outputPaths?: string[]
   images?: MessageImage[]
 }
 
@@ -166,6 +168,7 @@ export interface BootstrapPayload {
 }
 
 export interface LiveUpdate {
+  turnInfo?: { turnId: string; meta: Record<string, string | number | boolean> }
   jevActivity?: import('./jev-activity').JevActivity
   browser?: import('./BrowserContext').BrowserSignal
   lifecycle?: 'archived' | 'deleted' | 'restored'
