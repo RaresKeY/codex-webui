@@ -149,7 +149,7 @@ def main():
                 assert evaluate("document.querySelector('.chat-list .chat-row').textContent.includes('Conversation 44')")
                 click('.chat-list .sidebar-section-action')
                 click('.conversation-details > summary')
-                assert evaluate("document.querySelector('.conversation-details[open] .conversation-details-body').textContent.includes('WebUI 2')")
+                assert evaluate("document.querySelector('.conversation-details[open]').parentElement.querySelector('.chat-row').title.includes('WebUI 2')")
                 click('.conversation-details > summary')
                 click('.chat-list .conversation-details > summary')
                 click('.chat-list .chat-pin-action')

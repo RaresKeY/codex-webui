@@ -1,0 +1,16 @@
+{
+  "syntheticFixtures": true,
+  "checks": [
+    "archive removes from recents",
+    "archived list and restore",
+    "cancel makes no delete request",
+    "failure retains chat and dialog",
+    "double confirmation sends once",
+    "active turn disables archive/delete",
+    "permanent deletion survives reload",
+    "project deletion preserves chats and unassigns",
+    "Escape cancellation",
+    "390/320 dialogs fit"
+  ],
+  "uncaughtJavaScriptErrors": 0
+}

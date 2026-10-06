@@ -135,7 +135,22 @@ def main():
                 if not evaluate("Boolean(document.querySelector('.chat-sidebar'))"): click('[aria-label="Expand conversations"]')
                 def menu():
                     click('.chat-list .conversation-details summary')
-                    wait("document.querySelector('.chat-list .conversation-details[open]') !== null")
+                    wait("document.querySelector('.chat-list .conversation-details[open] .conversation-details-body')?.matches(':popover-open')")
+                history_geometry = evaluate("document.querySelector('.chat-list').getBoundingClientRect().height")
+                menu()
+                assert evaluate("document.querySelector('.chat-list').getBoundingClientRect().height") == history_geometry, 'Action menu moved history rows'
+                screenshot('desktop-chat-actions.png')
+                key('\ue00c')
+                wait("!document.querySelector('.conversation-details[open]') && document.activeElement.matches('.conversation-details > summary')")
+                for width,height in [(390,844),(320,640)]:
+                    viewport(width,height)
+                    if not evaluate("Boolean(document.querySelector('.chat-sidebar'))"): click('[aria-label="Expand conversations"]')
+                    menu()
+                    assert evaluate("(() => {const r=document.querySelector('.conversation-details[open] .conversation-details-body').getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight})()")
+                    screenshot(f'phone-{width}-chat-actions.png')
+                    key('\ue00c'); wait("!document.querySelector('.conversation-details[open]')")
+                viewport(1440,1000)
+                if not evaluate("Boolean(document.querySelector('.chat-sidebar'))"): click('[aria-label="Expand conversations"]')
                 menu(); click('.chat-list .conversation-details[open] .chat-menu-action:not(.danger)')
                 wait("!document.querySelector('.chat-list')?.textContent.includes('Recent chat 0')")
                 assert len(SidebarFixtures.archived) == 1
@@ -193,7 +208,7 @@ def main():
                 assert not evaluate("document.querySelector('.launch-recents').textContent.includes('Recent chat 0')")
                 if not evaluate("Boolean(document.querySelector('.chat-sidebar'))"): click('[aria-label="Expand conversations"]')
                 menu()
-                assert evaluate("document.querySelector('.chat-list .conversation-details[open]').textContent.includes('No project')")
+                assert evaluate("document.querySelector('.chat-list .conversation-details[open]').parentElement.querySelector('.chat-row').title.includes('No project')")
                 errors = [event for event in bidi.events if event.get('method')=='log.entryAdded' and event.get('params',{}).get('type')=='javascript' and event.get('params',{}).get('level')=='error']
                 assert not errors, f'{len(errors)} uncaught JavaScript errors'
                 result={'syntheticFixtures':True,'checks':['archive removes from recents','archived list and restore','cancel makes no delete request','failure retains chat and dialog','double confirmation sends once','active turn disables archive/delete','permanent deletion survives reload','project deletion preserves chats and unassigns','Escape cancellation','390/320 dialogs fit'],'uncaughtJavaScriptErrors':0}
