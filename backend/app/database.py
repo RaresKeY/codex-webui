@@ -39,6 +39,18 @@ CREATE TABLE IF NOT EXISTS settings (
   value_json TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS jev_activity (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  thread_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  duration_ms INTEGER,
+  turn_id TEXT,
+  decision_json TEXT
+);
 CREATE TABLE IF NOT EXISTS scheduled_tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -80,6 +92,7 @@ class Database:
                 await db.execute(
                     "ALTER TABLE projects ADD COLUMN workspace TEXT NOT NULL DEFAULT '.'"
                 )
+            await db.execute("UPDATE jev_activity SET status='interrupted' WHERE status='pending'")
             await db.commit()
         finally:
             await db.close()
@@ -110,6 +123,7 @@ class Database:
         try:
             await db.execute("DELETE FROM chat_metadata WHERE thread_id=?", (thread_id,))
             await db.execute("DELETE FROM turn_selections WHERE thread_id=?", (thread_id,))
+            await db.execute("DELETE FROM jev_activity WHERE thread_id=?", (thread_id,))
             await db.execute("DELETE FROM settings WHERE key IN (?,?)", ("chat-permissions:" + thread_id, "chat-execution:" + thread_id))
             await db.commit()
         finally:

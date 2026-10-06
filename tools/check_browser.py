@@ -46,6 +46,80 @@ THREAD = {'id': 'c1', 'name': 'A calmer place to build', 'cwd': '/workspace/code
     {'id': 'img0', 'type': 'imageGeneration', 'status': 'completed', 'result': PNG_DATA},
 ]}]}
 
+THEME_MARKDOWN = '''### A simple comparison
+
+The numbers below are illustrative examples.
+
+| Example outcome | Change after three years | After five years |
+| :--- | ---: | ---: |
+| The starting assumption stays unchanged | **+33%** | **+61%** |
+| The starting assumption finishes lower | **+6%** | **+29%** |
+
+> Keep assumptions visible when comparing outcomes.
+
+Use `total` for the result. [Read the guide](https://example.com/guide).
+
+```python
+total = sum(values)
+print(total)
+```
+'''
+
+
+def check_theme(evaluate, wait, click, viewport, screenshot, bidi, output, baseline):
+    """Measure real Markdown surfaces and responsive scrolling without submitting a prompt."""
+    measurements = []
+    for width, height, name in [(1440, 1000, 'desktop'), (390, 844, 'phone'), (320, 640, 'narrow-phone')]:
+        viewport(width, height)
+        if name == 'desktop':
+            wait("document.querySelector('.launch-recents button') !== null")
+            click('.launch-recents button')
+        wait("document.querySelector('.message.assistant table') !== null")
+        evaluate("(() => {document.querySelector('.event-feed').scrollTop=0;document.activeElement?.blur();return true})()")
+        time.sleep(.15)
+        colors = evaluate("""(() => {
+            const color = (selector, property) => getComputedStyle(document.querySelector(selector))[property];
+            const wrap = document.querySelector('.markdown-table-wrap');
+            wrap.scrollLeft = wrap.scrollWidth;
+            const scrolls = wrap.scrollLeft > 0;
+            wrap.scrollLeft = 0;
+            return {header:color('.markdown-content th','backgroundColor'),headerText:color('.markdown-content th','color'),
+                sidebarToken:getComputedStyle(document.documentElement).getPropertyValue('--sidebar').trim(),
+                sidebar:document.querySelector('.chat-sidebar') ? color('.chat-sidebar','backgroundColor') : null,
+                border:color('.markdown-table-wrap','borderTopColor'),body:color('.markdown-content td','color'),
+                codeHeader:color('.markdown-code-header','backgroundColor'),inlineCodeBorder:color('.markdown-content p code','borderTopColor'),
+                quoteBorder:color('.markdown-content blockquote','borderLeftColor'),overflow:document.documentElement.scrollWidth>innerWidth,
+                tableWidth:wrap.clientWidth,tableScrollWidth:wrap.scrollWidth,tableScrolls:scrolls,
+                disabledSend:document.querySelector('[aria-label="Send message"]').disabled};
+        })()""")
+        assert not colors['overflow'] and colors['disabledSend'], colors
+        if width < 1000:
+            assert colors['tableScrolls'], 'Wide Markdown table must scroll inside its wrapper'
+        def channels(value):
+            return [int(channel.strip()) for channel in value.removeprefix('rgb(').removesuffix(')').split(',')]
+        def luminance(value):
+            channels_linear = [component / 12.92 if component <= .04045 else ((component + .055) / 1.055) ** 2.4 for component in [c / 255 for c in channels(value)]]
+            return sum(component * weight for component, weight in zip(channels_linear, [.2126, .7152, .0722]))
+        colors['headerContrast'] = round((luminance(colors['headerText']) + .05) / (luminance(colors['header']) + .05), 2)
+        assert colors['headerContrast'] >= 4.5, colors
+        if not baseline:
+            assert colors['header'] == 'rgb(28, 28, 28)', colors
+            if colors['sidebar']:
+                assert colors['header'] == colors['sidebar'], colors
+            for field in ('header', 'headerText', 'border', 'codeHeader', 'inlineCodeBorder', 'quoteBorder'):
+                assert len(set(channels(colors[field]))) == 1, (field, colors[field])
+        prefix = 'before-' if baseline else 'after-'
+        screenshot(prefix + name + '-table.png')
+        evaluate("(() => {document.querySelector('.markdown-code-header button').scrollIntoView({block:'center'});document.querySelector('.markdown-code-header button').focus();return true})()")
+        wait("getComputedStyle(document.activeElement).outlineStyle !== 'none'")
+        screenshot(prefix + name + '-code-focus.png')
+        measurements.append({'viewport':f'{width}x{height}',**colors})
+    errors = [event for event in bidi.events if event.get('method') == 'log.entryAdded' and event.get('params', {}).get('type') == 'javascript' and event.get('params', {}).get('level') == 'error']
+    assert not errors and not Fixtures.calls, (len(errors), Fixtures.calls)
+    report = {'syntheticFixtures':True,'baseline':baseline,'measurements':measurements,'uncaughtErrors':len(errors),'modelCalls':0}
+    (output / ('before-checks.json' if baseline else 'checks.json')).write_text(json.dumps(report,indent=2)+'\n')
+    print('Theme checks passed at desktop, phone and narrow phone widths: Markdown contrast, table scrolling and copy focus; no model calls.')
+
 
 class Fixtures(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -158,12 +232,19 @@ def main():
     parser.add_argument('--baseline-bundle', type=Path, help='Capture the previous runtime bundle against matched synthetic states')
     parser.add_argument('--bundle', type=Path, help='Production bundle to verify without rebuilding it')
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'evidence/ui')
+    parser.add_argument('--theme-only', action='store_true', help='Check Markdown colors and responsive tables without model calls')
     args = parser.parse_args()
     if args.bundle:
         Fixtures.bundle = args.bundle.resolve()
     if args.baseline_bundle:
-        Fixtures.baseline = True
+        Fixtures.baseline = not args.theme_only
         Fixtures.bundle = args.baseline_bundle.resolve()
+    if args.theme_only:
+        Fixtures.history_delay = .1
+        THREAD['turns'][0]['items'] = [
+            {'id':'theme-user','type':'userMessage','content':[{'type':'text','text':'Show a simple comparison.'}]},
+            {'id':'theme-answer','type':'agentMessage','text':THEME_MARKDOWN},
+        ]
     sys.path.insert(0, str(args.bidi_helper.parent))
     spec = importlib.util.spec_from_file_location('webui_bidi', args.bidi_helper)
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
@@ -203,6 +284,9 @@ def main():
                 def viewport(width, height): bidi.command('browsingContext.setViewport', {'context': context, 'viewport': {'width': width, 'height': height}, 'devicePixelRatio': 1})
                 bidi.command('browsingContext.navigate', {'context': context, 'url': f'http://127.0.0.1:{server.server_port}', 'wait': 'complete'})
                 viewport(1440, 1000)
+                if args.theme_only:
+                    check_theme(evaluate, wait, click, viewport, screenshot, bidi, output, bool(args.baseline_bundle))
+                    return
                 if Fixtures.baseline:
                     wait("document.querySelector('.loading-screen') !== null")
                     screenshot('before-desktop-shell.png')

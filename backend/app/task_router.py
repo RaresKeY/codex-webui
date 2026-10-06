@@ -15,6 +15,12 @@ ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 POLICY_PATH = Path(__file__).with_name("routing_policy.json")
 MODELS = {"gpt-6.1-sol", "gpt-6-luna"}
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+DIAGNOSTICS = {
+    "online_search": "Would the current deliverable benefit from online search for external facts, sources, or documentation?",
+    "fresh_information": "Does this turn benefit specifically from up-to-date external information, such as current prices, tools, library versions, APIs, availability, or compatibility?",
+    "project_context": "Would this turn benefit from a relevant maintained project summary or focused specs? A selected project alone does not make a greeting need context; project follow-ups and implementation may need it.",
+}
+DIAGNOSTIC_CHOICES = {"yes", "no", "unclear"}
 
 
 class RoutingError(RuntimeError):
@@ -40,6 +46,13 @@ def routing_request(task: str) -> dict[str, Any]:
             "max": "Exceptional novel reasoning or unresolved failure of plausible approaches.",
         }},
     }}
+    for field, question in DIAGNOSTICS.items():
+        result["questions"][field] = {
+            "type": "choice", "instructions": common + " " + question + " Assess the immediate turn independently of model and effort, including Luna low. Recording a future investigation does not require doing it.",
+            "criteria": {"yes": "Relevant information would improve or is required for this turn.",
+                         "no": "This turn can be handled from supplied information or stable general knowledge.",
+                         "unclear": "The ask has unresolved references or insufficient evidence to decide."},
+        }
     encoded = json.dumps(result, ensure_ascii=True).encode()
     if len(encoded) > 60_000:
         raise RoutingError("This message is too large for Jev routing. Shorten it and resend.")
@@ -55,9 +68,9 @@ def parse_route(raw: Any, policy_version: str | None = None) -> dict[str, Any]:
         if raw["model"] != MODEL:
             raise ValueError()
         answers = raw["answers"]
-        if set(answers) != {"execution_model", "reasoning_effort"}:
+        if set(answers) != {"execution_model", "reasoning_effort", *DIAGNOSTICS}:
             raise ValueError()
-        for field, allowed in (("execution_model", MODELS), ("reasoning_effort", EFFORTS)):
+        for field, allowed in (("execution_model", MODELS), ("reasoning_effort", EFFORTS), *((key, DIAGNOSTIC_CHOICES) for key in DIAGNOSTICS)):
             answer = answers[field]
             probabilities = answer["probabilities"]
             if answer["type"] != "choice" or answer["choice"] not in allowed or set(probabilities) != allowed:
@@ -72,6 +85,10 @@ def parse_route(raw: Any, policy_version: str | None = None) -> dict[str, Any]:
             "model": answers["execution_model"]["choice"], "effort": answers["reasoning_effort"]["choice"],
             "modelConfidence": answers["execution_model"]["confidence"], "effortConfidence": answers["reasoning_effort"]["confidence"],
             "contextMissing": None, "policy": policy_version or json.loads(POLICY_PATH.read_text())["version"],
+            "modelProbabilities": answers["execution_model"]["probabilities"],
+            "effortProbabilities": answers["reasoning_effort"]["probabilities"],
+            "usage": {field: raw["usage"][field] for field in ("input_tokens", "output_tokens")},
+            "preparation": {field: {key: answers[field][key] for key in ("choice", "confidence", "probabilities")} for field in DIAGNOSTICS},
             "reviewNeeded": answers["execution_model"]["choice"] == "gpt-6-luna" and answers["reasoning_effort"]["choice"] in {"high", "xhigh", "max"},
         }
     except (KeyError, ValueError, TypeError, AttributeError):

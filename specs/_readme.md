@@ -5,9 +5,11 @@
 | Document | Status | Ground-truth ownership |
 | --- | --- | --- |
 | [jev_routing.md](jev_routing.md) | Backend-enforced text-chat path | V5 Auto policy, per-chat manual selection, acknowledged model change and exact user ask |
+| [jev_activity.md](jev_activity.md) | Implemented bounded metadata | Jev sidebar, attempts, detailed decisions, advisory information needs and actual turn status |
 | [chat_management.md](chat_management.md) | Implemented | Native archive/restore/delete, confirmations and project deletion |
 | [project_launch.md](project_launch.md) | Implemented | Project prompting, name-first creation, unassigned chats and actual last-model labels |
 | [new_chat_launch.md](new_chat_launch.md) | Implemented | Default prompt launch page, overlapping threads and unread activity |
+| [color_theme.md](color_theme.md) | Shared dark palette | Reusable color roles, neutral Markdown headers and shared sidebar surfaces |
 | [chat_interactions.md](chat_interactions.md) | Implemented bounded chat subset | Startup, skill/plugin/app/file mentions, per-turn effort, images, one activity indicator and context totals |
 | [chat_permissions.md](chat_permissions.md) | Per-chat native permission presets | Composer permissions, auto review, YOLO, new-chat inheritance, acknowledgement and persistence |
 | [sidebar_navigation.md](sidebar_navigation.md) | ChatGPT-style navigation | Sidebar hierarchy, project filtering, search, keyboard/touch and drawer focus |

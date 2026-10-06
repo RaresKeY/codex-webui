@@ -10,6 +10,7 @@ from .codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, Cod
 from .config import Settings, sandbox_policy
 from .models import TurnStart, ChatExecution
 from .database import Database
+from .jev_activity import JevActivity
 from .mentions import MentionCatalog
 from .plugins import PluginCatalog, PluginError
 from .permissions import PermissionMode, permission_overrides
@@ -129,6 +130,8 @@ class RoutedChat:
 
         async with self.reserve(thread_id):
             stage = "routing"
+            activity = JevActivity(self.db)
+            activity_status = "stopped"
             try:
                 await check_cancelled()
                 yield {"stage": stage}
@@ -153,10 +156,12 @@ class RoutedChat:
                 mentions.extend(await self.mentions.resolve(body.mentions, body.input, cwd, thread_id))
                 await check_cancelled()
                 choice = await self.execution(thread_id)
+                await activity.begin(thread_id, "auto" if choice.model == "auto" else "manual")
                 decision = await self.router.choose(body.input) if choice.model == "auto" else {
                     "model": choice.model, "effort": choice.effort, "reviewNeeded": False,
                     "policy": "manual", "source": "manual",
                 }
+                await activity.update("pending", stage, decision)
                 model, effort = decision.get("model"), decision.get("effort")
                 if model not in MODELS or effort not in EFFORTS:
                     raise MessageError(409, "Jev returned an unsupported routing decision. Your message was not sent.")
@@ -164,11 +169,13 @@ class RoutedChat:
                     raise MessageError(409, "Jev selected Luna with unusually high reasoning. Review the routing policy before sending this message.")
                 await check_cancelled()
                 stage = "switching"
+                await activity.update("pending", stage)
                 yield {"stage": stage, "decision": decision}
                 await self.bind(thread_id, {"model": model, "effort": effort, **permissions})
                 await check_cancelled()
                 await self.codex.publish_model_selection(thread_id, model, effort)
                 stage = "sending"
+                await activity.update("pending", stage)
                 yield {"stage": stage, "decision": decision}
                 await check_cancelled()
                 params = {
@@ -181,6 +188,8 @@ class RoutedChat:
                 if not isinstance(result, dict) or not isinstance(result.get("turn"), dict) or not result["turn"].get("id"):
                     raise MessageError(502, "Codex could not confirm submission. Check the conversation before retrying.")
                 saved = True
+                activity_status = "submitted"
+                await activity.update(activity_status, stage, turn_id=result["turn"]["id"])
                 try:
                     await self.db.record_turn_selection(thread_id, result["turn"]["id"], model, effort)
                 except sqlite3.Error:
@@ -205,3 +214,6 @@ class RoutedChat:
                     "sending": "Codex could not confirm submission. Check the conversation before retrying.",
                 }[stage]
                 raise MessageError(502, message) from None
+            finally:
+                if activity_status != "submitted":
+                    await activity.update(activity_status, stage)

@@ -16,6 +16,8 @@ Verification for this pass is in `evidence/ui/gallery-sidebar/`, including match
 
 Chat ⋯ menus expose archive and confirmed permanent deletion; Archived chats supports restore and delete. Selected project headers expose confirmed project deletion that preserves chats and files. See `chat_management.md`.
 
+New chat, Jev activity and Archived chats share 18px icon slots, 8px row padding and a 10px text gap. The Codex header starts on the same icon column. Desktop rows remain compact; narrow-screen targets retain at least 44px. `tools/check_alignment_browser.py` measures icon/text columns at desktop, phone and narrow phone widths with synthetic data.
+
 ## Gaps
 
 Pixel parity with ChatGPT Work is not claimed. Only existing Codex features are exposed. The sidebar search entry follows the official help description at https://help.openai.com/en/articles/10056348-finding-your-chats-projects-and-files-in-chatgpt; it stays limited to this companion's available chat search. Account-specific ChatGPT destinations and identity are outside the companion's capabilities. Mobile evidence uses Firefox touch emulation; physical iOS Safari remains unverified.

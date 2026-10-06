@@ -3,6 +3,7 @@ import { contentImages, imageSource } from './images'
 import { contextUsage } from './context-usage'
 import { UNTITLED_CONVERSATION } from './conversation-title'
 import type { RealtimeVoice, RealtimeVoicesList, WebRtcRealtimeVersion } from './app-server-protocol'
+import type { JevActivityPage, JevTurn, JevDecision } from './jev-activity'
 import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Mention, PermissionMode, Plugin, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -548,8 +549,32 @@ export interface RoutingDecision {
   contextMissing: number | null
   reviewNeeded?: boolean
   policy: string
+  modelProbabilities?: Record<string, number>
+  effortProbabilities?: Record<string, number>
+  usage?: { input_tokens: number; output_tokens: number }
+  preparation?: JevDecision['preparation']
 }
 export type RoutingStage = 'routing' | 'switching' | 'sending'
+
+export async function loadJevActivity(before?: number, signal?: AbortSignal): Promise<JevActivityPage> {
+  const result = await request<JevActivityPage>(`/jev/activity${before ? `?before=${before}` : ''}`, { signal })
+  if (!Array.isArray(result.data) || result.data.some(item => !Number.isSafeInteger(item.id) || item.id < 1 || typeof item.thread_id !== 'string'
+    || !['auto', 'manual', 'preview'].includes(item.source) || !['pending', 'submitted', 'classified', 'stopped', 'interrupted'].includes(item.status)
+    || !['routing', 'switching', 'sending'].includes(item.stage)) || (result.nextCursor !== null && (!Number.isSafeInteger(result.nextCursor) || result.nextCursor < 1))) {
+    throw new Error('Jev activity could not be read.')
+  }
+  return result
+}
+
+export async function loadJevTurn(id: number, signal?: AbortSignal): Promise<JevTurn> {
+  const result = await request<JevTurn>(`/jev/activity/${id}/turn`, { signal })
+  if (!['inProgress', 'completed', 'interrupted', 'failed', 'unknown'].includes(result.status)) throw new Error('Turn status is unavailable.')
+  return result
+}
+
+export async function loadActivityConversation(threadId: string): Promise<Conversation> {
+  return normalizeConversation(await request(`/threads/${encodeURIComponent(threadId)}`))
+}
 
 function readPermissionMode(raw: unknown): PermissionMode {
   const mode = object(raw).mode

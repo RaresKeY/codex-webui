@@ -1,0 +1,64 @@
+/* Shared dark-theme colors. Components consume roles rather than repeat hex values.
+   Keep content/illustration and user-selected project colors with their owners. */
+:root {
+  /* Surfaces, ordered by purpose rather than component. */
+  --canvas: #212121;
+  --sidebar: #1c1c1c;
+  --sidebar-rail: #181818;
+  --surface-inset: #171717;
+  --surface-field: #222222;
+  --panel: #292929;
+  --panel-raised: #303030;
+  --panel-hover: #333333;
+  --sidebar-hover: #252525;
+  --surface-selected: #2f2f2f;
+  --surface-pressed: #343434;
+  --surface-control: #2b2b2b;
+  --surface-control-hover: #3b3b3b;
+  --surface-control-selected: #454545;
+  --surface-header: var(--sidebar);
+
+  /* Structure and focus. */
+  --line: #3c3c3c;
+  --line-soft: #303030;
+  --line-control: #424242;
+  --line-strong: #444444;
+  --line-focus: #727272;
+  --line-focus-soft: #666666;
+
+  /* Content and controls. */
+  --text: #ececec;
+  --muted: #b4b4b4;
+  --subtle: #8b8b8b;
+  --text-secondary: #aaaaaa;
+  --text-label: #bbbbbb;
+  --text-control: #dddddd;
+  --text-inverse: var(--surface-inset);
+  --icon-muted: #999999;
+  --control-disabled: #676767;
+  --meter-fill: #c4c4c4;
+  --meter-track: #646464;
+  --accent: #dedede;
+  --accent-strong: #ffffff;
+  --accent-muted: #363636;
+
+  /* Semantic colors: retain meaning independently of neutral surfaces. */
+  --danger: #ef8c86;
+  --danger-soft: #edaeaa;
+  --danger-fill: #b4443f;
+  --danger-fill-hover: #ca504a;
+  --warning: #eac079;
+  --blue: #91afff;
+  --link: #8bc9ec;
+  --link-hover: #b6dcf2;
+  --unread: #75a7ff;
+
+  /* Shared translucent treatments. */
+  --scrim: #0008;
+  --scrim-modal: #000c;
+  --shadow-soft: #0003;
+  --shadow-popover: #0005;
+  --highlight-soft: #ffffff0a;
+  --highlight-faint: #ffffff08;
+  --focus-glow: #dedede0d;
+}

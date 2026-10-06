@@ -22,6 +22,8 @@ Before spending on Jev, selected IDs resolve against fresh catalogs and require 
 
 ## Presentation
 
+Markdown table and code headers use the sidebar's neutral dark surface. Shared surface, border, text, interaction and semantic colors are centralized in `frontend/src/theme.css`; see `color_theme.md`. Wide tables retain contained horizontal scrolling.
+
 The composer Permissions button selects Default, Full access with automatic approval review, or Full access YOLO for this chat. Native acknowledgement precedes the visible label change, and saving blocks new submissions. The server reapplies saved permissions with the Jev-selected model before each ask; see `chat_permissions.md`.
 
 One unboxed transcript indicator covers choosing, switching, sending, waiting and streaming. Empty assistant/reasoning events add no second placeholder or spinner. The composer keeps a disabled arrow while a send is active; the bottom activity plate and blinking text cursor are removed. Public thought summaries remain collapsible; raw reasoning deltas remain excluded.

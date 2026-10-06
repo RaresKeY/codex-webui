@@ -7,6 +7,7 @@
 | [product_experience.md](product_experience.md) | Single-sidebar navigation, chat and optional workspace tools |
 | [system_architecture.md](system_architecture.md) | Target architecture and evolution |
 | [sessions_and_codex.md](sessions_and_codex.md) | Resumability, streaming and host-runner transport |
+| [turn_preparation.md](turn_preparation.md) | Jev information-needs diagnostics and proposed preparation, summaries, TODO and research |
 | [projects_and_data.md](projects_and_data.md) | Organization, lifecycle and portability |
 | [workspace_experience.md](workspace_experience.md) | Right-side browser and safe editing evolution |
 | [automation_and_images.md](automation_and_images.md) | Scheduled work and image library roadmap |

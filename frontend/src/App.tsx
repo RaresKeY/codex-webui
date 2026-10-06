@@ -13,6 +13,8 @@ import { deriveConversationTitle, isUntitledConversation } from './conversation-
 import { chatImageAssets, type ChatImageAsset } from './chat-images'
 import { readUnreadChats, saveUnreadChats } from './unread-chats'
 import { ArchivedChats } from './ArchivedChats'
+import { JevActivityPage } from './JevActivityPage'
+import { loadActivityConversation } from './api'
 import { LaunchPad } from './LaunchPad'
 import { ChatActivityMark } from './ChatActivityMark'
 import { recoverChatActivity, reconcileChat, reduceChatActivity, type ChatActivity } from './chat-activity'
@@ -109,6 +111,7 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
       <nav className="sidebar-nav" aria-label="Workspace">
         <button className="new-chat" onClick={onNewChat}><Edit3 size={20} />New chat</button>
         <button className={searchOpen ? 'active' : ''} aria-expanded={searchOpen} aria-controls="sidebar-search" onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><Search size={20} />Search chats<span className="sidebar-shortcut" aria-hidden="true">⌘ K</span></button>
+        <button className={view === 'jev' ? 'active' : ''} onClick={() => setView('jev')}><Activity size={20} />Jev</button>
         {searchOpen && <div id="sidebar-search" className="sidebar-search"><label className="search-field"><Search size={18} className={searching ? 'searching' : ''} /><input ref={searchInput} value={query} onChange={event => { setQuery(event.target.value); setSearching(false); setSearchError(false); if (!event.target.value) setRemoteChats(null) }} placeholder="Search chats" aria-label="Search all resumable chats" /><button type="button" onClick={closeSearch} aria-label="Close chat search"><X size={17} /></button></label></div>}
       </nav>
       <button type="button" className={`sidebar-archive-link ${view === 'archived' ? 'active' : ''}`} onClick={() => setView('archived')}><Archive size={18} />Archived chats</button>
@@ -1054,7 +1057,7 @@ export default function App() {
   }
   const newChat = () => showView('new')
   return <div className={`app-shell ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
-    {!leftOpen && view !== 'chat' && view !== 'new' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
+    {!leftOpen && view !== 'chat' && view !== 'new' && view !== 'jev' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
     {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={closeLeft} />
     <div className="content-area" inert={leftOpen && isNarrowLayout() ? true : undefined}>
@@ -1066,6 +1069,11 @@ export default function App() {
       {view === 'images' && <ImagesPage data={data} onChange={changeImages} onSelect={selectConversation} currentConversation={activeConversation} currentEvents={events} />}
       {view === 'archived' && <ArchivedChats refresh={archivedRefresh} projects={data.projects} onRestore={restoreChat} onDelete={chat => askDelete({ chat })} onOpen={selectConversation} />}
       {view === 'settings' && <SettingsPage data={data} connection={connection} />}
+      {view === 'jev' && <JevActivityPage chats={data.conversations} leftOpen={leftOpen} onMenu={openLeft} onOpen={async id => {
+        const chat = data.conversations.find(item => item.id === id) ?? await loadActivityConversation(id)
+        setData(current => current && !current.conversations.some(item => item.id === id) ? { ...current, conversations: [chat, ...current.conversations] } : current)
+        selectConversation(chat)
+      }} />}
     </div>
     {rightOpen && <ContextPanel files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={() => setRightOpen(false)} />}
     {deleteTarget && <Modal title={deleteTarget.chat ? 'Delete chat?' : 'Delete project?'} description={deleteTarget.chat ? `Permanently delete “${deleteTarget.chat.title}” and any chats it spawned. This cannot be undone.` : `Delete “${deleteTarget.project?.name}”? Its chats will be kept under No project. Workspace files will stay on disk.`} onClose={() => { if (!deleteBusy.current) setDeleteTarget(null) }}><div className="modal-form delete-confirmation">{deleteError && <p className="modal-error" role="alert">{deleteError}</p>}<footer><button type="button" autoFocus className="button" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="button destructive-button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? 'Deleting…' : deleteTarget.chat ? 'Delete chat' : 'Delete project'}</button></footer></div></Modal>}

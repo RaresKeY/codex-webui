@@ -11,5 +11,5 @@ Bootstrap serves local shell data without native RPCs; history/models/usage hydr
 ## Gaps
 
 - Reconnect still hydrates authoritative history rather than replaying missed events.
-- No persisted routing evidence or automatic retry ledger is added; the UI never retries automatically.
+- Only bounded decision metadata is persisted in `jev_activity`; no raw routing evidence or automatic retry ledger is added; the UI never retries automatically.
 - Runtime image architecture follows the supplied standalone Codex binary; amd64 is the current workstation target.

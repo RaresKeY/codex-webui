@@ -11,7 +11,7 @@ The browser submits each text message once to the backend. After checking that t
 3. Apply the selected model and effort with `thread/settings/update` and await its acknowledgement, loading the thread first if needed.
 4. Send the unchanged ask through `turn/start` with that model and effort.
 
-Jev failure, an invalid decision, or a rejected model change stops submission. There is no silent fallback or automatic retry. Failed drafts remain in the composer. Jev receives only the current ask; it receives no history, source files, account metadata, or credentials from Codex. Its confidence estimates are uncalibrated.
+Jev failure, an invalid decision, or a rejected model change stops submission. There is no silent fallback or automatic retry. Failed drafts remain in the composer. The Jev sidebar shows routing attempts, model/effort probabilities, classifier usage, advisory search/freshness/project-context answers, and actual turn status checks. Automatic retrieval and maintained summaries remain [TODO and research](design/turn_preparation.md). Jev receives only the current ask; it receives no history, source files, account metadata, or credentials from Codex. Its confidence estimates are uncalibrated.
 
 `POST /api/threads/{id}/messages` owns this complete operation; `/turns` is a routed compatibility alias. Caller-selected model/effort fields, thread creation with `prompt`, and direct steering cannot bypass routing. Leading/trailing whitespace is preserved through the composer, Jev payload and Codex input.
 

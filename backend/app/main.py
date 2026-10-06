@@ -26,6 +26,7 @@ from .chat_service import MessageError, RoutedChat, UNSUPPORTED_HISTORY_MESSAGE,
 from .codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, CodexUnavailable
 from .config import Settings, load_settings
 from .database import Database
+from .jev_activity import JevActivity, activity_page
 from .models import (
     ApprovalResponse,
     ChatMetadataUpdate,
@@ -389,10 +390,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def route_message(thread_id: str, body: RouteRequest) -> Any:
         if not codex.available:
             raise HTTPException(503, "Connect the local Codex service before routing a message.")
+        activity = JevActivity(db)
+        await activity.begin(thread_id, "preview")
+        status = "stopped"
         try:
-            return await router.choose(body.input)
+            decision = await router.choose(body.input)
+            status = "classified"
+            await activity.update(status, "routing", decision)
+            return decision
         except RoutingError as exc:
             raise HTTPException(409, str(exc)) from None
+        finally:
+            await activity.update(status, "routing")
+
+    @app.get("/api/jev/activity")
+    async def list_jev_activity(before: int | None = Query(None, ge=1), limit: int = Query(50, ge=1, le=100)) -> Any:
+        return await activity_page(db, before, limit)
+
+    @app.get("/api/jev/activity/{activity_id}/turn")
+    async def read_jev_turn(activity_id: int) -> Any:
+        row = await db.fetchone("SELECT thread_id,turn_id FROM jev_activity WHERE id=?", (activity_id,))
+        if not row or not row["turn_id"]:
+            raise HTTPException(404, "No submitted turn is recorded for this activity.")
+        result = await codex.request("thread/read", {"threadId": row["thread_id"], "includeTurns": True})
+        thread = result.get("thread", {}) if isinstance(result, dict) else {}
+        turns = thread.get("turns", []) if isinstance(thread, dict) else []
+        turn = next((item for item in turns if isinstance(item, dict) and item.get("id") == row["turn_id"]), None)
+        if not turn:
+            raise HTTPException(404, "This turn is unavailable in native history.")
+        status = turn.get("status")
+        return {"threadId": row["thread_id"], "turnId": row["turn_id"],
+                "status": status if isinstance(status, str) and status in {"inProgress", "completed", "interrupted", "failed"} else "unknown"}
 
     @app.post("/api/threads/{thread_id}/resume")
     async def resume_thread(thread_id: str, body: ThreadResume) -> Any:

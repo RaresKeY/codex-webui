@@ -12,6 +12,8 @@ History reconciliation also discovers externally created threads and refreshes n
 
 Project navigation opens the same persistent quick composer scoped to that project and its last ten chats. The Projects page offers folder cards, new-project creation and scoped prompting by default; pending jobs retain the project captured at send time. Recorded model/effort labels appear at the bottom and in recent rows, never inferred from the native thread default. See `project_launch.md`.
 
+Recent titles align with the section heading and composer. Activity indicators occupy a trailing slot between the title and right-aligned model/time metadata, including pending launch jobs. The Auto/Jev and last-model labels also share a right edge. Recent rows use a shared `--launch-row-inset`: 12px on desktop and 8px at narrow widths. Padding and compensating negative inline margins extend the hover/focus fill beyond the text without shifting either content column; phone targets and focus outlines fit inside the viewport. Keyboard focus uses the same quiet background as hover plus the existing outline. `tools/check_alignment_browser.py` measures these columns and checks real pointer hover/Tab focus at 1440×1000, 390×844 and 320×640.
+
 ## Gaps
 
 - Reloading during preparation does not durably preserve unsent drafts.
