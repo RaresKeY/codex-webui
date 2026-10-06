@@ -161,6 +161,7 @@ def main():
                 evaluate("(() => {Array.from(document.querySelectorAll('.sidebar-nav button')).find(b=>b.textContent==='Jev').click();return true;})()")
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 1")
                 assert not evaluate("document.querySelector('.jev-context').textContent.includes('1,200')"), 'Other chat details leaked'
+                wait("!document.querySelector('.jev-context-heading button').disabled")
                 JevFixtures.fail_activity = True
                 click('[aria-label="Reload Jev history"]')
                 wait("document.querySelector('.jev-context [role=alert]') !== null")
