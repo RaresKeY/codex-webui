@@ -20,6 +20,14 @@ Both image builds explicitly mark final images `io.rareskey.retention=retain`, i
 
 For the experimental browser, install the rendered `tools/browser-bridge.service.in` as a user service, with `@PROJECT_ROOT@` replaced by the owning checkout path. Start it before `tools/run-container.sh --detach --tailscale --browser`. The bridge uses the installed user Flatpak and project Python environment; its private Unix socket is mounted read-only into the container. `CODEX_WEBUI_CONTAINER_NAME`, `CODEX_WEBUI_PORT` and `CODEX_WEBUI_DATA_VOLUME` allow an isolated candidate runtime. The default preserves the existing data volume and loopback port. Roll back by stopping the candidate and relaunching the retained previous image against the same data volume; omit `--browser` when the image predates the bridge. See [browser_integration.md](browser_integration.md).
 
+## Runtime retention
+
+The owning build wrapper explicitly labels final runtime/toolchain images as retained and intermediate images as ephemeral, with `codex-webui-2` project ownership. Builds hold the shared workstation retention lock; reviewed cleanup holds it exclusively and refuses active coordinated or uncoordinated builds.
+
+Keep the deployed runtime, the current tools image, an active candidate and one verified previous runtime tagged `localhost/codex-webui-2:rollback`. After deployment verification, older `before-*` snapshots and superseded untagged project runtimes are no longer required rollback images unless the user explicitly reserves them. Rotate the single rollback before deleting obsolete exact IDs. Classify by inspected image ID/labels rather than tag names alone; preserve the complete parent-image closure of all retained images and every container reference.
+
+Remove completed project-owned ephemeral intermediates by exact ID after reference/dependency/task checks. No stopped-container cleanup is implied for unrelated work. Never force deletion, prune volumes, use unrestricted system/image prune or manually modify container storage. Volumes, authentication, the dedicated browser profile and non-reproducible source/evidence survive cleanup. The global weekly timer removes only labeled dangling ephemeral images older than seven days; it does not replace review of tagged snapshots or unlabeled images. Unknown ownership remains a separate audit.
+
 ## Gaps
 
 - amd64 image/runtime is the current target; no ARM64 image/runtime evidence yet.
