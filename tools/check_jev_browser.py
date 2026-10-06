@@ -24,6 +24,12 @@ class JevFixtures(SidebarFixtures):
     fail_activity = False
     activity_reads = 0
     browser_actions = []
+    browser_inputs = []
+    browser_open = False
+    browser_url = ""
+
+    def browser_state(self):
+        return {"available":True,"agentAvailable":False,"open":self.browser_open,"width":1280,"height":900,"revision":1,"url":self.browser_url,"frame":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdAAf/2Q==" if self.browser_open else None}
     records = [{"id": index, "thread_id": "c1", "turn_id": "t0" if index in (5, 3) else None,
                 "source": {5: "auto", 4: "auto", 3: "manual", 2: "auto", 1: "preview"}[index],
                 "status": {5: "submitted", 4: "stopped", 3: "submitted", 2: "pending", 1: "classified"}[index],
@@ -39,7 +45,7 @@ class JevFixtures(SidebarFixtures):
     def do_GET(self):
         path = urlsplit(self.path).path
         if path.startswith("/api/threads/") and path.endswith("/browser"):
-            return self.reply({"available":True,"agentAvailable":False,"open":False,"width":1280,"height":900,"revision":0})
+            return self.reply(self.browser_state())
         if path.startswith("/api/threads/") and path.endswith("/jev/activity"):
             type(self).activity_reads += 1
             if self.fail_activity:
@@ -53,10 +59,16 @@ class JevFixtures(SidebarFixtures):
         return super().do_GET()
 
     def do_POST(self):
+        if urlsplit(self.path).path.endswith('/browser/input'):
+            body=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))))
+            type(self).browser_inputs.append(body)
+            return self.reply(self.browser_state())
         if urlsplit(self.path).path.endswith('/browser'):
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', '0'))))
             type(self).browser_actions.append(body)
-            return self.reply({"available":True,"agentAvailable":False,"open":False,"width":1280,"height":900,"revision":1,"url":body.get('url','')})
+            type(self).browser_open = True
+            type(self).browser_url = body.get('url','')
+            return self.reply(self.browser_state())
         return super().do_POST()
 
 
@@ -229,6 +241,16 @@ def main():
                 evaluate("(() => {document.querySelector('.browser-toolbar').requestSubmit();return true})()")
                 wait("document.querySelector('[aria-label=\"Browser address\"]').value === 'https://duckduckgo.com/'")
                 assert JevFixtures.browser_actions == [{'action':'open','url':'https://duckduckgo.com/'}]
+                wait("document.querySelector('.browser-viewport.interactive') !== null")
+                evaluate("(() => {const el=document.querySelector('.browser-viewport'),r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2}));return true})()")
+                wait("!document.querySelector('.browser-navigation button').disabled")
+                assert abs(JevFixtures.browser_inputs[-1]['x']-640)<3 and abs(JevFixtures.browser_inputs[-1]['y']-450)<3, JevFixtures.browser_inputs[-1]
+                evaluate("(() => {document.querySelector('.browser-viewport').dispatchEvent(new KeyboardEvent('keydown',{key:'a',bubbles:true}));return true})()")
+                wait("!document.querySelector('.browser-navigation button').disabled")
+                assert JevFixtures.browser_inputs[-1] == {'action':'text','text':'a'}
+                click('.browser-control-toggle')
+                assert evaluate("document.querySelector('.browser-viewport').getAttribute('tabindex') === null")
+                click('.browser-control-toggle')
                 screenshot('desktop-browser-chrome.png')
                 for width,height in [(390,844),(320,640)]:
                     viewport(width,height)
@@ -236,6 +258,11 @@ def main():
                     click('[aria-label="Open context panel"]')
                     wait("document.querySelector('.browser-address-bar') !== null")
                     assert evaluate("(() => {const r=document.querySelector('.browser-toolbar').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && document.documentElement.scrollWidth<=innerWidth})()")
+                    wait("document.querySelector('.browser-viewport.interactive') !== null")
+                    assert evaluate("document.querySelector('[aria-label=\"Type in browser\"]') !== null")
+                    evaluate("(() => {const el=document.querySelector('.browser-viewport'),r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2}));return true})()")
+                    wait("!document.querySelector('.browser-navigation button').disabled")
+                    assert abs(JevFixtures.browser_inputs[-1]['x']-640)<3 and abs(JevFixtures.browser_inputs[-1]['y']-450)<3
                     screenshot(f'phone-{width}-browser-chrome.png')
                     click('[aria-label="Close context panel"]')
 

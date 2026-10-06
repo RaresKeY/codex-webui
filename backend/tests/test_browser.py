@@ -158,3 +158,70 @@ async def test_cancelled_launch_closes_browser_before_registration(monkeypatch):
         await action
     assert closed.is_set()
     assert service.sessions == {}
+
+@pytest.mark.asyncio
+async def test_human_browser_input_is_scoped_and_not_agent_tool():
+    from app.browser_service import BrowserInput, BROWSER_TOOL
+    from pydantic import ValidationError
+    class InputBrowser(FixtureBrowser):
+        def __init__(self):
+            super().__init__()
+            self.inputs = []
+        def call(self, method, params):
+            self.inputs.append((method, params))
+            return super().call(method, params)
+        def wait(self, seconds):
+            pass
+    service = BrowserService(True, AsyncMock())
+    service.available = True
+    browser = InputBrowser()
+    service.sessions['a'] = Session(browser, snapshot={'version':'v1'})
+    with pytest.raises(ValueError, match='this chat'):
+        await service.user_input('b', BrowserInput(action='click', x=10, y=20))
+    await service.user_input('a', BrowserInput(action='click', x=10, y=20))
+    mouse = [params for method, params in browser.inputs if method == 'Input.dispatchMouseEvent']
+    assert [item['type'] for item in mouse] == ['mousePressed', 'mouseReleased']
+    assert all(item['x'] == 10 and item['y'] == 20 for item in mouse)
+    with pytest.raises(ValueError, match='Stale'):
+        await service.action('a', BrowserAction(action='click', target='0', version='v1'))
+    await service.user_input('a', BrowserInput(action='text', text='human text'))
+    assert ('Input.insertText', {'text':'human text'}) in browser.inputs
+    await service.user_input('a', BrowserInput(action='key', key='Backspace'))
+    assert any(method == 'Input.dispatchKeyEvent' and params['windowsVirtualKeyCode'] == 8 for method, params in browser.inputs)
+    await service.user_input('a', BrowserInput(action='scroll', delta=-80))
+    assert any(params.get('deltaY') == -80 for _, params in browser.inputs)
+    assert 'x' not in BROWSER_TOOL['inputSchema']['properties']
+    with pytest.raises(ValidationError):
+        BrowserAction.model_validate({'action':'click','x':10,'y':20})
+    for packet in [{'action':'click','x':1280}, {'action':'click','y':float('nan')}, {'action':'key','key':'F12'}, {'action':'scroll','delta':2000}]:
+        with pytest.raises(ValidationError):
+            BrowserInput.model_validate(packet)
+
+
+def test_human_input_origin_and_schema(client: TestClient):
+    assert client.post('/api/threads/a/browser/input', json={'action':'click','x':2,'y':3}, headers={'origin':'https://evil.example'}).status_code == 403
+    assert client.post('/api/threads/a/browser/input', json={'action':'evaluate'}).status_code == 422
+    assert client.post('/api/threads/a/browser/input', json={'action':'click','x':2,'y':3}).status_code == 409
+
+@pytest.mark.asyncio
+async def test_human_input_bridge_transport_is_separate():
+    import httpx
+    from pathlib import Path
+    from app.browser_bridge import BrowserBridgeClient
+    from app.browser_service import BrowserInput
+    packets = []
+    async def transport(request):
+        import json
+        packets.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={'available':True,'open':True,'revision':2})
+    bridge = BrowserBridgeClient(Path('/not-used'), AsyncMock())
+    await bridge.client.aclose()
+    bridge.client = httpx.AsyncClient(transport=httpx.MockTransport(transport), base_url='http://browser')
+    bridge.available = True
+    try:
+        state = await bridge.user_input('chat-a', BrowserInput(action='click', x=10, y=20))
+        assert state['open'] and state['revision'] == 2
+        assert packets[0][0] == '/threads/chat-a/input'
+        assert packets[0][1]['x'] == 10
+    finally:
+        await bridge.client.aclose()

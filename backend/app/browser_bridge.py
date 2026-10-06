@@ -12,7 +12,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from .browser_service import BrowserAction, BrowserService
+from .browser_service import BrowserAction, BrowserInput, BrowserService
 
 
 class BrowserBridgeClient(BrowserService):
@@ -81,6 +81,14 @@ class BrowserBridgeClient(BrowserService):
         result = response.json()
         self.states[thread_id] = result['state']
         return result['observation']
+
+    async def user_input(self, thread_id, action):
+        if not self.available:
+            raise ValueError('Browser bridge unavailable')
+        response = await self.client.post('/threads/' + quote(thread_id, safe='') + '/input', json=action.model_dump())
+        response.raise_for_status()
+        self.states[thread_id] = response.json()
+        return self.state(thread_id)
 
     async def stop(self):
         if self.available:
@@ -159,6 +167,13 @@ def create_bridge_app():
             operation.cancel()
             watcher.cancel()
             await asyncio.gather(operation, watcher, return_exceptions=True)
+
+    @app.post('/threads/{thread_id}/input')
+    async def user_input(thread_id: str, body: BrowserInput):
+        try:
+            return await browser.user_input(thread_id, body)
+        except Exception:
+            raise HTTPException(409, 'Browser input failed') from None
 
     @app.post('/close-all')
     async def close_all():

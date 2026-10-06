@@ -15,12 +15,12 @@ profile_name = 'smoke-' + uuid.uuid4().hex
 driver.DATA = Path(smoke_directory.name)
 driver.PROFILE = '/var/data/codex-webui-browser/' + profile_name
 profile_path = Path.home() / '.var/app' / driver.APP / 'data/codex-webui-browser' / profile_name
-from app.browser_service import BrowserService, BrowserAction, Session
+from app.browser_service import BrowserService, BrowserAction, BrowserInput, Session
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.send_header('Content-Type','text/html'); self.end_headers()
-        self.wfile.write(b'''<!doctype html><title>Browser fixture</title><h1>Waiting</h1><button onclick="document.querySelector('h1').textContent='Ready'">Open result</button><input aria-label="Search"><input type=password aria-label="Password" value="fixture-secret">''')
+        self.wfile.write((b'<script></script>' if self.path == '/read' else b"<script>document.cookie='smoke_cookie=saved; Max-Age=3600; SameSite=Lax'</script>") + b'''<!doctype html><title>Browser fixture</title><h1>Waiting</h1><button onclick="document.querySelector('h1').textContent='Ready'">Open result</button><iframe srcdoc="&lt;input type=checkbox&gt;"></iframe><input aria-label="Search"><input type=password aria-label="Password" value="fixture-secret">''')
     def log_message(self,*args): pass
 server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -46,8 +46,24 @@ async def run():
         target=next(e for e in observation['elements'] if e['label']=='Search')
         await service.action('fixture',BrowserAction(action='type',target=target['id'],version=observation['version'],text='hello'))
         assert browser.evaluate("document.querySelector('[aria-label=Search]').value")=='hello'
+        bounds=browser.evaluate("(()=>{const r=document.querySelector('[aria-label=Search]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+        await service.user_input('fixture',BrowserInput(action='click',**bounds))
+        await service.user_input('fixture',BrowserInput(action='text',text=' human'))
+        assert browser.evaluate("document.querySelector('[aria-label=Search]').value")=='hello human'
+        await service.user_input('fixture',BrowserInput(action='key',key='Backspace'))
+        assert browser.evaluate("document.querySelector('[aria-label=Search]').value")=='hello huma'
+        bounds=browser.evaluate("(()=>{const f=document.querySelector('iframe'),r=f.getBoundingClientRect(),b=f.contentDocument.querySelector('input').getBoundingClientRect();return {x:r.x+f.clientLeft+b.x+b.width/2,y:r.y+f.clientTop+b.y+b.height/2}})()")
+        await service.user_input('fixture',BrowserInput(action='click',**bounds))
+        assert browser.evaluate("document.querySelector('iframe').contentDocument.querySelector('input').checked") is True
         print('PASS audited Flatpak browser, screenshot, observed click/type, password omission, cursor signal, stable polling observation; no external sites or inference')
-try: asyncio.run(run())
+async def cookie_restart():
+    with Browser([url]) as browser:
+        browser.navigate(url + '/read')
+        assert 'smoke_cookie=saved' in browser.evaluate('document.cookie')
+    print('PASS persistent cookie survives clean browser shutdown/reopen in isolated profile')
+try:
+    asyncio.run(run())
+    asyncio.run(cookie_restart())
 finally:
     server.shutdown();server.server_close()
     shutil.rmtree(profile_path, ignore_errors=True)

@@ -16,3 +16,11 @@
 .browser-tab button:focus-visible, .browser-toolbar button:focus-visible { outline: 1px solid var(--line-focus); outline-offset: -1px; }
 .browser-tab button:disabled, .browser-toolbar button:disabled { opacity: .4; cursor: default; }
 @media (pointer: coarse) { .browser-tab { height: 44px; } .browser-tab button, .browser-toolbar button { width: 40px; height: 40px; } .browser-tab button { flex-basis: 40px; } .browser-address-bar { height: 44px; } }
+
+.browser-control-toggle { margin-left: auto; border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; padding: 6px 10px; border-radius: 6px; }
+.browser-control-toggle:hover, .browser-control-toggle[aria-pressed=true] { background: var(--panel-hover); color: var(--text); }
+.browser-viewport.interactive { cursor: default; touch-action: pan-y; outline-offset: -2px; }
+.browser-viewport.interactive img { pointer-events: none; }
+.browser-typing { display: flex; gap: 6px; padding: 6px 10px; border-top: 1px solid var(--line-soft); }
+.browser-typing input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-field); color: var(--text); padding: 7px; font-size: 12px; }
+.browser-typing button { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); padding: 5px 8px; font-size: 12px; cursor: pointer; }

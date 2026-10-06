@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import StreamingResponse
 
-from .browser_service import BROWSER_TOOL, BrowserAction, BrowserService
+from .browser_service import BROWSER_TOOL, BrowserAction, BrowserInput, BrowserService
 from .browser_bridge import BrowserBridgeClient
 from .chat_service import MessageError, RoutedChat, UNSUPPORTED_HISTORY_MESSAGE, unsupported_history
 from .codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, CodexUnavailable
@@ -179,6 +179,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return browser.state(thread_id)
         except Exception:
             raise HTTPException(409, "Browser action failed. Check the runtime, URL, or refresh the observation.") from None
+
+    @app.post("/api/threads/{thread_id}/browser/input")
+    async def browser_user_input(thread_id: str, body: BrowserInput):
+        try:
+            return await browser.user_input(thread_id, body)
+        except Exception:
+            raise HTTPException(409, "Browser input failed. Reopen the browser view and try again.") from None
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
