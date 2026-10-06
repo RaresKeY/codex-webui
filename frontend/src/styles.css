@@ -832,3 +832,29 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message-jev-process { display: inline-flex; align-items: center; gap: 2px; min-height: 40px; padding: 0 4px; border: 0; background: transparent; color: var(--subtle); font-size: 11px; cursor: pointer; }
 .message-jev-process:hover { color: var(--text); }
 .message-author:has(.message-jev-process) { flex-wrap: wrap; margin-top: -8px; margin-bottom: 0; }
+
+/* Commands are quiet disclosure rows; only an opened shell gets a surface. */
+.command-group, .command-card { margin: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; min-width: 0; }
+.command-group > summary, .command-card > summary { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 0; color: var(--muted); font-size: 13px; }
+.command-group > summary:hover, .command-card > summary:hover { background: transparent; color: var(--text); }
+.command-group > summary > svg, .command-card > summary > svg { flex-shrink: 0; }
+.command-group-label, .command-card > summary > .command-line { display: block; min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 400; }
+.command-failure { color: var(--danger); font-size: 11px; flex-shrink: 0; }
+.command-group > summary .command-failure { margin-left: 0; }
+.command-group-items { padding: 0; gap: 0; border: 0; background: transparent; }
+.command-card-body { margin: 4px 0 10px; padding: 14px 16px 10px; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--panel); }
+.command-card-body header { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.command-card-body pre { padding: 0; max-height: 320px; overflow: auto; background: transparent; }
+.command-card-body code { color: var(--text-secondary); font: 12px/1.65 ui-monospace, monospace; white-space: pre; }
+.command-card-body footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 11px; color: var(--subtle); }
+.command-card.failed .command-card-body footer span:last-child { color: var(--danger); }
+@media (max-width: 600px) { .command-card-body { padding: 12px; } .command-card-body pre { max-height: 260px; } }
+.command-card > summary > span.command-line { display: block; flex-direction: row; }
+.command-card > summary > span.command-failure { display: block; flex: 0 0 auto; }
+
+.file-change-disclosure { min-width: 0; }
+.file-change-disclosure > summary { list-style: none; display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--muted); font-size: 13px; cursor: pointer; }
+.file-change-disclosure > summary::-webkit-details-marker { display: none; }
+.file-change-disclosure > summary > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.file-change-disclosure > summary:hover { color: var(--text); }
+.file-change-disclosure[open] > summary .disclosure-chevron { transform: rotate(90deg); }

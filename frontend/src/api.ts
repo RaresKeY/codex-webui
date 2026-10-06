@@ -331,7 +331,7 @@ export function normalizeItem(raw: unknown, index: number): StreamEvent | null {
   if (type.includes('command') || type.includes('exec')) {
     const command = contentText(item.command ?? item.content)
     const output = contentText(item.aggregatedOutput)
-    return { id, kind: 'command', title: text(item.name, 'Command'), content: [command, output].filter(Boolean).join('\n'), timestamp, state: item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : 'done', meta: { ...(typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {}), ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}) } }
+    return { id, kind: 'command', command, commandOutput: typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput : undefined, title: text(item.name, 'Command'), content: [command, output].filter(Boolean).join('\n'), timestamp, state: item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : 'done', meta: { ...(typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {}), ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}) } }
   }
   if (type.includes('file') || type.includes('patch') || type.includes('diff')) return { id, kind: 'file', title: text(item.name, 'Workspace changes'), outputPaths: array(item.changes).map(change => text(object(change).path)).filter(Boolean).slice(0, 100), content: fileChangesText(item.changes) || contentText(item.path ?? item.content), timestamp, state: item.status === 'failed' ? 'failed' : item.status === 'inProgress' ? 'running' : 'done' }
   return null

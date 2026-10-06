@@ -14,7 +14,7 @@ The experimental Browser panel follows the reference split conversation/browser 
 
 The context sidebar should read as part of the app: a square, edge-attached split next to the conversation, with a compact aligned header and neutral tool selection. Its closed top-right control remains quiet and reachable; narrow screens attach the pane to the viewport edges.
 
-The chat keeps intermediate turn work behind a quiet Worked disclosure, with final answers outside it. A header toggle pins a compact Sources/Outputs summary beside the conversation; the full contextual pane remains the larger workspace surface. Response actions offer copy and an inclusive branch into a new native chat, without ratings. Timestamps appear on hover/focus (directly on touch). Current boundaries are in `specs/turn_presentation.md`.
+Command activity uses nested, compact disclosure rows, with a Shell/output surface only for the opened command. The chat keeps intermediate turn work behind a quiet Worked disclosure, with final answers outside it. A header toggle pins a compact Sources/Outputs summary beside the conversation; the full contextual pane remains the larger workspace surface. Response actions offer copy and an inclusive branch into a new native chat, without ratings. Timestamps appear on hover/focus (directly on touch). Current boundaries are in `specs/turn_presentation.md`.
 
 ## Gaps
 

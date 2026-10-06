@@ -86,6 +86,8 @@ export interface StreamEvent {
   meta?: Record<string, string | number | boolean>
   append?: boolean
   sources?: { url: string; title: string }[]
+  command?: string
+  commandOutput?: string
   outputPaths?: string[]
   images?: MessageImage[]
 }

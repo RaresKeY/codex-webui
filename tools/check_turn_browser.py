@@ -28,6 +28,8 @@ class TurnFixtures(SidebarFixtures):
             {"id":"u", "type":"userMessage", "content":[{"type":"text","text":"Find recent research and write a short report."}]},
             {"id":"comment", "type":"agentMessage", "phase":"commentary", "text":"I’ll check the sources and prepare the report."},
             {"id":"search", "type":"webSearch", "query":"research", "results":[{"title":"Publisher’s report","url":"https://example.org/report"}]},
+            {"id":"cmd1", "type":"commandExecution", "command":"pwd; rg --files /workspace/codex-webui-2/specs --glob '*.md'", "aggregatedOutput":"/workspace/codex-webui-2\n" + "specs/report.md\n" * 80, "status":"completed", "exitCode":0, "durationMs":1200},
+            {"id":"cmd2", "type":"commandExecution", "command":"cat /workspace/codex-webui-2/missing-report.md", "aggregatedOutput":"No such file", "status":"completed", "exitCode":1},
             {"id":"file", "type":"fileChange", "status":"completed", "changes":[{"path":"/workspace/codex-webui-2/report.md", "diff":"+Short research report", "kind":{"type":"add"}}]},
             {"id":"answer", "type":"agentMessage", "phase":"final_answer", "text":"The report is ready. [Publisher’s report](https://example.org/report)."}]},
         {"id":"later", "status":"completed", "durationMs":8000, "completedAt":1791300035, "items":[
@@ -127,6 +129,32 @@ def main():
                 screenshot('desktop-collapsed.png')
                 click('.turn-work > summary')
                 assert evaluate("document.querySelector('.turn-work').open && document.querySelector('.turn-work').textContent.includes('I’ll check the sources') && document.querySelector('.turn-work').textContent.includes('Searched the web')")
+                assert evaluate("!document.querySelector('.file-change-disclosure').open && document.querySelector('.file-change-disclosure > summary').textContent.includes('Changed 1 file')")
+                click('.file-change-disclosure > summary')
+                assert evaluate("document.querySelector('.file-change-disclosure').textContent.includes('Short research report')")
+                click('.file-change-disclosure > summary')
+                assert evaluate("!document.querySelector('.command-group').open && document.querySelector('.command-group > summary').textContent.includes('Ran 2 commands') && document.querySelector('.command-group > summary').textContent.includes('1 failed')")
+                click('.command-group > summary')
+                assert evaluate("document.querySelectorAll('.command-card').length === 2 && !document.querySelector('.command-card').open")
+                evaluate("(() => {document.querySelector('.command-card > summary').focus();return true})()")
+                key('\ue007')
+                assert evaluate("document.querySelector('.command-card').open && document.querySelector('.command-card-body').textContent.includes('Shell') && document.querySelector('.command-card-body').textContent.includes('Success') && document.querySelector('.command-card-body pre').scrollHeight > document.querySelector('.command-card-body pre').clientHeight")
+                screenshot('desktop-command-expanded.png')
+                click('.command-card > summary')
+                click('.command-card.failed > summary')
+                assert evaluate("document.querySelector('.command-card.failed .command-card-body').textContent.includes('Exit 1')")
+                click('.command-card.failed > summary')
+                for width,height in [(390,844),(320,640)]:
+                    viewport(width,height)
+                    assert evaluate("(() => {const s=document.querySelector('.command-card > summary'),r=s.getBoundingClientRect();return r.height<=44 && r.width<=innerWidth && document.documentElement.scrollWidth<=innerWidth && document.querySelector('.command-line').scrollWidth>document.querySelector('.command-line').clientWidth})()")
+                    screenshot(f'phone-{width}-command-rows.png')
+                    click('.command-card > summary')
+                    assert evaluate("document.querySelector('.command-card-body pre').clientHeight<=260 && document.documentElement.scrollWidth<=innerWidth")
+                    evaluate("(() => {document.querySelector('.command-card-body').scrollIntoView({block:'center'});return true})()")
+                    screenshot(f'phone-{width}-command-output.png')
+                    click('.command-card > summary')
+                viewport(1440,1000)
+                click('.command-group > summary')
                 screenshot('desktop-expanded.png')
                 click('.turn-work > summary')
                 point = evaluate("(() => {const r=document.querySelector('.event-feed > .message.assistant').getBoundingClientRect();return {x:Math.round(r.x+40),y:Math.round(r.y+20)}})()")

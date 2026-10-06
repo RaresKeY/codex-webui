@@ -152,27 +152,24 @@ function MessageModel({ model, effort }: { model: string; effort?: string }) {
 }
 
 function CommandCard({ event }: { event: StreamEvent }) {
-  const commandLine = event.content.split('\n').find(line => line.trim())?.trim() || event.title || 'Command'
-  return <details className={`command-card ${event.state ?? ''}`}>
-    <summary><ChevronRight size={13} className="disclosure-chevron" /><Terminal size={13} /><span><strong>{event.title ?? 'Command'}</strong><code>{commandLine}</code></span><EventState event={event} /><time>{event.timestamp}</time></summary>
-    <div className="command-card-body"><pre><code><span className="prompt">$</span> {event.content}</code></pre>{event.meta && <div className="event-meta">{Object.entries(event.meta).filter(([key]) => !['turnId', 'turnStatus', 'turnDurationMs', 'startedAtMs', 'completedAtMs', 'phase'].includes(key)).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}</div>
+  const command = event.command ?? event.content.split('\n').find(line => line.trim())?.trim() ?? event.title ?? 'Command'
+  const commandLine = command.replace(/\s+/g, ' ').trim() || 'Command'
+  const output = event.state !== 'running' && event.commandOutput !== undefined ? event.commandOutput : event.content.startsWith(command) ? event.content.slice(command.length).replace(/^\n/, '') : event.content
+  const exitCode = typeof event.meta?.exitCode === 'number' ? event.meta.exitCode : undefined
+  const failed = event.state === 'failed' || exitCode !== undefined && exitCode !== 0
+  const status = event.state === 'running' ? 'Running' : failed ? exitCode !== undefined ? `Exit ${exitCode}` : 'Failed' : exitCode === 0 ? 'Success' : 'Completed'
+  return <details className={`command-card ${event.state ?? ''} ${failed ? 'failed' : ''}`}>
+    <summary title={`${commandLine} · ${status}`}><Terminal size={15} /><span className="command-line">{event.state === 'running' ? 'Running' : 'Ran'} {commandLine}</span>{failed && <span className="command-failure">Failed</span>}<ChevronRight size={14} className="disclosure-chevron" /></summary>
+    <div className="command-card-body"><header>Shell</header><pre><code><span className="prompt">$</span> {command}{output ? `\n\n${output}` : ''}</code></pre><footer><span>{typeof event.meta?.durationMs === 'number' ? `${(event.meta.durationMs / 1000).toFixed(1)}s` : ''}</span><span>{status}</span></footer></div>
   </details>
 }
 
 function CommandGroup({ commands }: { commands: StreamEvent[] }) {
-  const aggregateState: StreamEvent['state'] = commands.some(command => command.state === 'running')
-    ? 'running'
-    : commands.some(command => command.state === 'failed')
-      ? 'failed'
-      : commands.every(command => command.state === 'done')
-        ? 'done'
-        : 'pending'
-  const aggregateEvent = { ...commands.at(-1)!, state: aggregateState }
-  const label = aggregateState === 'running'
-    ? `${commands.length} ${commands.length === 1 ? 'command' : 'commands'} running`
-    : `${commands.length} ${commands.length === 1 ? 'command' : 'commands'} ran`
-  return <details className={`command-group ${aggregateState}`}>
-    <summary><span className="event-icon"><Terminal size={15} /></span><span className="command-group-label"><strong>{label}</strong><small>Show command activity</small></span><EventState event={aggregateEvent} /><time>{aggregateEvent.timestamp}</time><ChevronRight size={14} className="disclosure-chevron" /></summary>
+  if (commands.length === 1) return <CommandCard event={commands[0]} />
+  const running = commands.some(command => command.state === 'running')
+  const failures = commands.filter(command => command.state === 'failed' || typeof command.meta?.exitCode === 'number' && command.meta.exitCode !== 0).length
+  return <details className={`command-group ${running ? 'running' : failures ? 'failed' : 'done'}`}>
+    <summary><Terminal size={15} /><span className="command-group-label">{running ? 'Running' : 'Ran'} {commands.length} commands</span>{failures > 0 && <span className="command-failure">{failures} failed</span>}<ChevronRight size={14} className="disclosure-chevron" /></summary>
     <div className="command-group-items">{commands.map(command => <CommandCard event={command} key={command.id} />)}</div>
   </details>
 }
@@ -220,6 +217,7 @@ function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBr
   }
   if (event.kind === 'search') return <div className="search-step"><Globe size={15} /><span>Searched the web</span>{event.content && <small>{event.content}</small>}</div>
   if (event.kind === 'command') return <CommandCard event={event} />
+  if (event.kind === 'file') return <details className={`file-change-disclosure ${event.state ?? ''}`}><summary><FileCode2 size={15} /><span>{event.state === 'running' ? 'Changing' : event.state === 'failed' ? 'Failed changes to' : 'Changed'} {event.outputPaths?.length ? `${event.outputPaths.length} ${event.outputPaths.length === 1 ? 'file' : 'files'}` : 'workspace files'}</span>{event.state === 'failed' && <span className="command-failure">Failed</span>}<ChevronRight size={14} className="disclosure-chevron" /></summary><div className="command-card-body"><header>Changes</header><pre><code>{event.content}</code></pre></div></details>
   if (event.kind === 'reasoning' && !event.content) return null
   if (event.kind === 'reasoning') return <details className="reasoning-disclosure"><summary><Sparkles size={15} /><span>Thought summary</span><ChevronRight size={14} className="disclosure-chevron" /></summary><MarkdownContent source={event.content} compact cwd={cwd} /></details>
   const Icon = eventIcons[event.kind]
@@ -227,7 +225,7 @@ function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBr
     <div className="event-icon"><Icon size={15} /></div>
     <div className="event-content">
       <header><span>{event.title ?? event.kind}</span><EventState event={event} /><time>{event.timestamp}</time></header>
-      <p className={event.kind === 'file' ? 'file-lines' : ''}>{event.content}</p>
+      <p>{event.content}</p>
       {event.meta && <div className="event-meta">{Object.entries(event.meta).filter(([key]) => !['turnId', 'turnStatus', 'turnDurationMs', 'startedAtMs', 'completedAtMs', 'phase'].includes(key)).map(([key, val]) => <span key={key}>{key}: <strong>{String(val)}</strong></span>)}</div>}
       {event.kind === 'approval' && event.state === 'pending' && <>{approvalError && <p className="approval-error" role="alert">{approvalError}</p>}<div className="approval-actions">{!event.meta?.unsupported && <button className="button primary" disabled={responding} onClick={() => answerApproval(true)}><Check size={14} />{responding ? 'Sending…' : 'Allow once'}</button>}<button className="button" disabled={responding} onClick={() => answerApproval(false)}><X size={14} />{responding ? 'Sending…' : event.meta?.unsupported ? 'Cancel safely' : 'Deny'}</button></div></>}
     </div>

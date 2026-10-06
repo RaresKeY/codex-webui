@@ -81,6 +81,10 @@ The image was deployed through the owning rootless wrapper to the existing priva
 
 The separate Jev transcript row is removed. Auto responses with a matching native turn now place “Jev process ›” immediately after the model/effort label. `tools/check_jev_browser.py` checks the absence of the old row and presence of the new inline control, then verifies exact-run opening, event updates, no polling, chat isolation, pagination, errors and desktop/390px/320px layouts. The runtime image passed 198 backend and 102 frontend tests plus lint/type/build and offline lifecycle checks. The existing private deployment was verified against the exact new built assets, connected Codex/browser, HTTPS health and WebSocket origin checks. Evidence is under `evidence/ui/jev-response-link/`; no paid inference or upstream update was performed.
 
+## Compact command and file disclosures
+
+Command groups are compact Ran/Running N commands rows; opening reveals one-line command disclosures, and opening a command reveals a neutral Shell panel with full native command/output, bounded scrolling, known duration and exit/outcome. File diffs use matching closed-by-default Changed files disclosures. Collapsed failures remain explicit. `tools/check_turn_browser.py` now verifies nested group/command opening, keyboard Enter, failed exit labels, file expansion, long-row truncation and bounded scrollable output at desktop, 390px and 320px. Captures are under `evidence/ui/compact-commands/`. Core browser regression also passed at desktop/phone, including the exact synthetic send. The retained image passed 198 backend and 102 frontend tests, lint/type/build and offline native lifecycle checks. Deployment was checked against exact built assets, HTTPS health, Codex/browser connection and WebSocket origin boundaries; no paid calls or upstream updates occurred.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.
