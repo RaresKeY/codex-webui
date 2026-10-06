@@ -16,6 +16,8 @@ The context sidebar should read as part of the app: a square, edge-attached spli
 
 Command activity uses nested, compact disclosure rows, with a Shell/output surface only for the opened command. The chat keeps intermediate turn work behind a quiet Worked disclosure, with final answers outside it. A header toggle pins a compact Sources/Outputs summary beside the conversation; the full contextual pane remains the larger workspace surface. Response actions offer copy and an inclusive branch into a new native chat, without ratings. Timestamps appear on hover/focus (directly on touch). Current boundaries are in `specs/turn_presentation.md`.
 
+The current experimental pane is flush with the app edge, resizable at its left divider and opened through the header control. Jev stays in its sidebar tab. Worked activity uses compact aligned disclosures, and tables offer independent soft wrapping.
+
 ## Gaps
 
 - Decide user-controlled model overrides only if requested; the current requested flow is automatically routed.

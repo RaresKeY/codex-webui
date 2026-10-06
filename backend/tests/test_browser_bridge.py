@@ -53,3 +53,27 @@ async def test_bridge_disconnect_cancels_action():
     with pytest.raises(Exception):
         await asyncio.wait_for(endpoint('a', BrowserAction(action='observe'), request), 1)
     assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+async def test_clean_event_stream_eof_backs_off(tmp_path, monkeypatch):
+    calls = []
+    async def handle(request):
+        calls.append(request.url.path)
+        return httpx.Response(200, text='{"ready":true}\n')
+    proxy = BrowserBridgeClient(tmp_path / 'socket', AsyncMock())
+    await proxy.client.aclose()
+    proxy.client = httpx.AsyncClient(transport=httpx.MockTransport(handle), base_url='http://browser')
+    delays = []
+    async def stop_after_delay(seconds):
+        delays.append(seconds)
+        raise asyncio.CancelledError
+    monkeypatch.setattr('app.browser_bridge.asyncio.sleep', stop_after_delay)
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await proxy._events()
+        assert calls == ['/events']
+        assert delays == [1]
+        assert proxy.ready.is_set()
+    finally:
+        await proxy.client.aclose()

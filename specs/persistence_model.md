@@ -14,6 +14,8 @@ Per-chat permission preferences use bounded string values in the existing `setti
 
 See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
 
+Response branching copies project metadata, retained turn selections and per-chat preferences in one BEGIN IMMEDIATE transaction. Any optional copy failure rolls back the entire local copy and returns the acknowledged native branch with metadataSaved false; no schema migration is needed.
+
 ## Gaps
 
 - Add versioned migrations, backup/rollback, busy timeout, indexes, retention, and corruption recovery.

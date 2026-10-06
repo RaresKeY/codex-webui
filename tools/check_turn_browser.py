@@ -31,7 +31,7 @@ class TurnFixtures(SidebarFixtures):
             {"id":"cmd1", "type":"commandExecution", "command":"pwd; rg --files /workspace/codex-webui-2/specs --glob '*.md'", "aggregatedOutput":"/workspace/codex-webui-2\n" + "specs/report.md\n" * 80, "status":"completed", "exitCode":0, "durationMs":1200},
             {"id":"cmd2", "type":"commandExecution", "command":"cat /workspace/codex-webui-2/missing-report.md", "aggregatedOutput":"No such file", "status":"completed", "exitCode":1},
             {"id":"file", "type":"fileChange", "status":"completed", "changes":[{"path":"/workspace/codex-webui-2/report.md", "diff":"+Short research report", "kind":{"type":"add"}}]},
-            {"id":"answer", "type":"agentMessage", "phase":"final_answer", "text":"The report is ready. [Publisher’s report](https://example.org/report)."}]},
+            {"id":"answer", "type":"agentMessage", "phase":"final_answer", "text":"The report is ready. [Publisher’s report](https://example.org/report).\n\n| Species | Description |\n| --- | --- |\n| Example | A deliberately long description that should wrap within this table when soft wrap is enabled. |"}]},
         {"id":"later", "status":"completed", "durationMs":8000, "completedAt":1791300035, "items":[
             {"id":"u2", "type":"userMessage", "content":[{"type":"text","text":"What next?"}]},
             {"id":"a2", "type":"agentMessage", "phase":"final_answer", "text":"Review the report and choose a follow-up."}]}]}
@@ -126,6 +126,10 @@ def main():
                 assert evaluate("document.querySelector('.turn-work > summary').textContent.includes('Worked for 27s') && !document.querySelector('.turn-work').open")
                 assert evaluate("document.querySelector('.event-feed > .message.assistant').textContent.includes('The report is ready') && getComputedStyle(document.querySelector('.response-time')).opacity === '0'")
                 assert not evaluate("Boolean(document.querySelector('[aria-label*=\"Rate\"], [aria-label*=\"Thumb\"]'))")
+                assert evaluate("document.querySelector('[aria-label=\"Soft wrap table\"]').getAttribute('aria-pressed') === 'false'")
+                click('[aria-label="Soft wrap table"]')
+                assert evaluate("document.querySelector('.markdown-table-wrap.soft-wrap') !== null && getComputedStyle(document.querySelector('td')).whiteSpace === 'normal'")
+                click('[aria-label="Soft wrap table"]')
                 screenshot('desktop-collapsed.png')
                 click('.turn-work > summary')
                 assert evaluate("document.querySelector('.turn-work').open && document.querySelector('.turn-work').textContent.includes('I’ll check the sources') && document.querySelector('.turn-work').textContent.includes('Searched the web')")
@@ -147,6 +151,11 @@ def main():
                 for width,height in [(390,844),(320,640)]:
                     viewport(width,height)
                     assert evaluate("(() => {const s=document.querySelector('.command-card > summary'),r=s.getBoundingClientRect();return r.height<=44 && r.width<=innerWidth && document.documentElement.scrollWidth<=innerWidth && document.querySelector('.command-line').scrollWidth>document.querySelector('.command-line').clientWidth})()")
+                    click('[aria-label="Soft wrap table"]')
+                    assert evaluate("(() => {const r=document.querySelector('.markdown-table-wrap.soft-wrap table').getBoundingClientRect();return r.width<=innerWidth && document.documentElement.scrollWidth<=innerWidth})()")
+                    evaluate("(() => {document.querySelector('.markdown-table').scrollIntoView({block:'center'});return true})()")
+                    screenshot(f'phone-{width}-table-wrapped.png')
+                    click('[aria-label="Soft wrap table"]')
                     screenshot(f'phone-{width}-command-rows.png')
                     click('.command-card > summary')
                     assert evaluate("document.querySelector('.command-card-body pre').clientHeight<=260 && document.documentElement.scrollWidth<=innerWidth")

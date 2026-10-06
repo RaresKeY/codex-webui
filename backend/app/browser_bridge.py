@@ -58,6 +58,7 @@ class BrowserBridgeClient(BrowserService):
                         # Bridge action state excludes frames; retain the last bounded frame.
                         cached.update(params)
                         await self.publish(event)
+                await asyncio.sleep(1)
             except (httpx.HTTPError, ValueError):
                 # Reconnect event transport only; never retry an action.
                 await asyncio.sleep(1)

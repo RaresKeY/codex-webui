@@ -129,6 +129,23 @@ class Database:
         finally:
             await db.close()
 
+    async def copy_fork_metadata(self, source_id: str, new_id: str, turn_ids: set[str]) -> dict[str, Any]:
+        """Copy organization/preferences as one optional transaction after native ack."""
+        db = await self.connect()
+        try:
+            await db.execute("BEGIN IMMEDIATE")
+            row = await (await db.execute("SELECT project_id FROM chat_metadata WHERE thread_id=?", (source_id,))).fetchone()
+            project_id = row["project_id"] if row else None
+            await db.execute("INSERT INTO chat_metadata(thread_id,project_id,pinned,updated_at) VALUES(?,?,0,?)", (new_id, project_id, utc_now()))
+            selections = await (await db.execute("SELECT turn_id,model,effort FROM turn_selections WHERE thread_id=?", (source_id,))).fetchall()
+            await db.executemany("INSERT INTO turn_selections(thread_id,turn_id,model,effort) VALUES(?,?,?,?)", [(new_id, row["turn_id"], row["model"], row["effort"]) for row in selections if row["turn_id"] in turn_ids])
+            for preference in ("chat-permissions", "chat-execution"):
+                await db.execute("INSERT INTO settings(key,value_json,updated_at) SELECT ?,value_json,? FROM settings WHERE key=?", (f"{preference}:{new_id}", utc_now(), f"{preference}:{source_id}"))
+            await db.commit()
+            return {"project_id": project_id, "pinned": 0}
+        finally:
+            await db.close()
+
     async def projects(self) -> list[dict[str, Any]]:
         return await self.fetchall("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
 

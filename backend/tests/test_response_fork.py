@@ -57,7 +57,25 @@ def test_branch_rejects_running_turn_and_unconfirmed_ack(client, monkeypatch, wo
 
 def test_optional_metadata_failure_does_not_retry_or_reject_created_branch(client, monkeypatch, workspace_root):
     native = setup_native(client, monkeypatch, workspace_root)
-    monkeypatch.setattr(client.app.state.db, 'all_chat_metadata', AsyncMock(side_effect=OSError('fixture')))
+    monkeypatch.setattr(client.app.state.db, 'copy_fork_metadata', AsyncMock(side_effect=OSError('fixture')))
     response = client.post('/api/threads/source/fork', json={'turn_id': 'early'})
     assert response.status_code == 201 and response.json()['metadataSaved'] is False
     assert native.await_count == 2
+
+
+def test_metadata_copy_failure_rolls_back_every_optional_row(client, monkeypatch, workspace_root):
+    setup_native(client, monkeypatch, workspace_root)
+    db = client.app.state.db
+    async def seed():
+        await db.record_turn_selection('source', 'early', 'gpt-6-luna', 'low')
+        await db.set_setting('chat-permissions:source', 'yolo')
+        await db.execute("CREATE TRIGGER fail_copy BEFORE INSERT ON turn_selections WHEN NEW.thread_id='branch' BEGIN SELECT RAISE(ABORT,'fixture'); END")
+    asyncio.run(seed())
+    response = client.post('/api/threads/source/fork', json={'turn_id': 'early'})
+    assert response.status_code == 201 and response.json()['metadataSaved'] is False
+    async def verify():
+        assert 'branch' not in await db.all_chat_metadata()
+        assert await db.turn_selections('branch') == {}
+        assert await db.get_setting('chat-permissions:branch') is None
+        assert await db.get_setting('chat-permissions:source') == 'yolo'
+    asyncio.run(verify())

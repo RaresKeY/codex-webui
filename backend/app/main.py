@@ -547,7 +547,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             source = result.get("thread", {}) if isinstance(result, dict) else {}
             if not isinstance(source, dict) or source.get("id") != thread_id:
                 raise MessageError(502, "Codex could not confirm the source chat.")
-            target = next((turn for turn in source.get("turns", []) if isinstance(turn, dict) and turn.get("id") == body.turn_id), None)
+            if not isinstance(source.get("turns"), list):
+                raise MessageError(502, "Codex could not confirm this chat history.")
+            target = next((turn for turn in source["turns"] if isinstance(turn, dict) and turn.get("id") == body.turn_id), None)
             if not target:
                 raise MessageError(404, "This response's turn is no longer available.")
             if target.get("status") not in {"completed", "interrupted", "failed"}:
@@ -555,7 +557,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if not isinstance(source.get("cwd"), str) or not source["cwd"]:
                 raise MessageError(400, "This chat workspace is unavailable for branching.")
             try:
-                workspace.resolve(source["cwd"], must_exist=True)
+                if not workspace.resolve(source["cwd"], must_exist=True).is_dir():
+                    raise MessageError(400, "This chat workspace is unavailable for branching.")
             except (UnsafePath, FileNotFoundError) as exc:
                 raise MessageError(400, "This chat workspace is unavailable for branching.") from exc
             params["lastTurnId"] = body.turn_id
@@ -566,19 +569,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise MessageError(502, "Codex could not confirm the branch. Refresh chats before trying again.")
             # Optional organizational metadata must never invalidate a native fork acknowledgement.
             result["metadataSaved"] = False
+            if not isinstance(fork.get("turns"), list):
+                return result
             try:
-                metadata = (await db.all_chat_metadata()).get(thread_id, {})
-                await db.set_chat_metadata(new_id, metadata.get("project_id"), False)
-                selections = await db.turn_selections(thread_id)
-                for turn in fork.get("turns", []):
-                    selection = selections.get(turn.get("id")) if isinstance(turn, dict) else None
-                    if selection:
-                        await db.record_turn_selection(new_id, turn["id"], selection["model"], selection["effort"])
-                for preference in ("chat-permissions", "chat-execution"):
-                    value = await db.get_setting(f"{preference}:{thread_id}")
-                    if value is not None:
-                        await db.set_setting(f"{preference}:{new_id}", value)
-                fork["webui"] = {"project_id": metadata.get("project_id"), "pinned": 0}
+                retained = {turn["id"] for turn in fork["turns"] if isinstance(turn, dict) and isinstance(turn.get("id"), str)}
+                fork["webui"] = await db.copy_fork_metadata(thread_id, new_id, retained)
                 result["metadataSaved"] = True
             except (sqlite3.Error, OSError):
                 pass

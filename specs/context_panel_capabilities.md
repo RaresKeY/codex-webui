@@ -18,7 +18,7 @@ Changes to a tool's availability, backing, mutation authority, or Project-inheri
 
 ## Behavior
 
-The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts and remains available from the conversation header. Jev opens explicitly from a turn step or navigation; agent Browser actions select and open Browser automatically. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
+The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts and remains available from the conversation header. Jev opens explicitly from the sidebar navigation; agent Browser actions select and open Browser automatically. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
 
 | Tool | Current state | Backing and boundary |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ The right side is one collapsible contextual panel with a registry-driven select
 | Explorer | Available, companion adapter | Existing canonical-root-contained workspace tree/read/write routes. It is not Codex Desktop's private Explorer. |
 | Changes | Available, companion adapter | Read-only, bounded `git status --porcelain=v1 -z` below the configured workspace. It reports added, modified, and deleted paths; it does not stage, commit, run hooks, or accept arbitrary arguments. |
 | Browser | Experimental companion | Bounded typed Jev browser actions, live frames and cursor events; see `browser_integration.md`. |
-| Jev | Available, thread-scoped | Safe routing records and actual preparation events, linked from each Auto turn; see `jev_activity.md`. |
+| Jev | Available, thread-scoped | Safe routing records and actual preparation events, available only in the sidebar tab; see `jev_activity.md`. |
 
 The installed schema also contains powerful `thread/shellCommand`, `command/exec`, and `process/spawn` families. Their existence does not make an arbitrary Terminal safe for this localhost UI. The companion intentionally projects none of them. Codex-originated commands remain observable through Outputs and the thread-scoped background-terminal inventory.
 
@@ -61,6 +61,8 @@ On the experimental branch, Browser is an implemented bounded live screenshot co
 The open panel is a flush rectangular app region: no outer gap, radius or floating shadow, with a single neutral divider from the conversation. Its compact header aligns with the chat header; neutral tool tabs share the existing palette. The closed state has a 40px top-right pane control. Opening moves that control into the pane header; Escape or closing restores focus to the conversation control. Narrow layouts use an edge-attached full-height pane rather than an inset rounded card.
 
 See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
+
+The left pane edge is draggable, bounded to preserve conversation space on desktop and viewport width on phones. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to reset the default tool width. Width survives opening/closing within the app session.
 
 ## Gaps
 

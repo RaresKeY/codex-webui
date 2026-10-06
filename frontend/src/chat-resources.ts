@@ -8,6 +8,21 @@ export function safeWebsite(value: unknown): string | null {
   } catch { return null }
 }
 
+function sourceMarkdown(markdown: string): string {
+  let fence: { character: string; length: number } | null = null
+  const visible: string[] = []
+  for (const line of markdown.split('\n')) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+    if (fence) {
+      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim()) fence = null
+      continue
+    }
+    if (marker) { fence = { character: marker[1][0], length: marker[1].length }; continue }
+    if (!/^( {4}|\t)/.test(line)) visible.push(line)
+  }
+  return visible.join('\n').replace(/(`+)[\s\S]*?\1/g, '')
+}
+
 export function chatResources(events: StreamEvent[]) {
   const sources = new Map<string, { url: string; title: string }>()
   const outputs = new Map<string, { id: string; title: string }>()
@@ -18,7 +33,7 @@ export function chatResources(events: StreamEvent[]) {
       if (url && sources.size < 100) sources.set(url, { url, title: source.title.slice(0, 300) })
     }
     if (event.kind === 'message') {
-      for (const match of event.content.matchAll(/(?<!!)\[([^\]\n]{1,300})\]\((https?:\/\/[^\s)]{1,2048})\)/g)) {
+      for (const match of sourceMarkdown(event.content).matchAll(/(?<!!)\[([^\]\n]{1,300})\]\((https?:\/\/[^\s)]{1,2048})\)/g)) {
         const url = safeWebsite(match[2])
         if (url && sources.size < 100) sources.set(url, { url, title: match[1] })
       }
@@ -31,14 +46,19 @@ export function chatResources(events: StreamEvent[]) {
 
 export type TurnFeedEntry = { type: 'event'; event: StreamEvent } | { type: 'work'; id: string; events: StreamEvent[] }
 export function groupTurnFeed(events: StreamEvent[]): TurnFeedEntry[] {
-  const entries: TurnFeedEntry[] = [], work = new Map<string, Extract<TurnFeedEntry, { type: 'work' }>>()
+  const entries: TurnFeedEntry[] = []
+  const segments = new Map<string, number>()
   for (const event of events) {
     const turnId = typeof event.meta?.turnId === 'string' ? event.meta.turnId : ''
     const intermediate = ['reasoning', 'command', 'file', 'search'].includes(event.kind) || event.kind === 'message' && event.meta?.phase === 'commentary'
     if (turnId && intermediate && !event.meta?.jevActivityId) {
-      let group = work.get(turnId)
-      if (!group) { group = { type: 'work', id: turnId, events: [] }; work.set(turnId, group); entries.push(group) }
-      group.events.push(event)
+      const previous = entries.at(-1)
+      if (previous?.type === 'work' && previous.events[0].meta?.turnId === turnId) previous.events.push(event)
+      else {
+        const segment = segments.get(turnId) ?? 0
+        segments.set(turnId, segment + 1)
+        entries.push({ type: 'work', id: segment ? `${turnId}-segment-${segment}` : turnId, events: [event] })
+      }
     } else entries.push({ type: 'event', event })
   }
   return entries
@@ -52,12 +72,16 @@ export function workLabel(events: StreamEvent[], active: boolean): string {
 
 // The native fork boundary is a whole turn, so only its last visible reply can
 // represent “from here”; older unknown-phase interim messages stay readable.
-export function isResponseBranchPoint(events: StreamEvent[], event: StreamEvent): boolean {
-  const turnId = event.meta?.turnId
-  if (typeof turnId !== 'string' || event.role !== 'assistant' || !['message', 'image'].includes(event.kind) || event.meta?.phase === 'commentary') return false
+export function responseBranchPoints(events: StreamEvent[]): Set<string> {
+  const turns = new Set<string>(), points = new Set<string>()
   for (let index = events.length - 1; index >= 0; index--) {
-    const candidate = events[index]
-    if (candidate.role === 'assistant' && ['message', 'image'].includes(candidate.kind) && candidate.meta?.phase !== 'commentary' && candidate.meta?.turnId === turnId) return candidate.id === event.id
+    const event = events[index], turnId = event.meta?.turnId
+    if (typeof turnId !== 'string' || turns.has(turnId) || event.role !== 'assistant' || !['message', 'image'].includes(event.kind) || event.meta?.phase === 'commentary' || !(event.content || event.images?.length)) continue
+    turns.add(turnId); points.add(event.id)
   }
-  return false
+  return points
+}
+
+export function isResponseBranchPoint(events: StreamEvent[], event: StreamEvent): boolean {
+  return responseBranchPoints(events).has(event.id)
 }

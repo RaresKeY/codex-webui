@@ -1,7 +1,7 @@
 import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, WrapText } from 'lucide-react'
 import { InlineImages } from './InlineImages'
 import { imageSource } from './images'
 
@@ -33,10 +33,15 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   </div>
 }
 
+function MarkdownTable({ children }: { children?: ReactNode }) {
+  const [wrap, setWrap] = useState(false)
+  return <div className="markdown-table"><div className="markdown-table-toolbar"><button type="button" aria-label="Soft wrap table" aria-pressed={wrap} onClick={() => setWrap(value => !value)}><WrapText size={14} />Soft wrap</button></div><div className={`markdown-table-wrap ${wrap ? 'soft-wrap' : ''}`}><table>{children}</table></div></div>
+}
+
 const components: Components = {
   a: ({ href, children, title }) => <a href={href} title={title} target="_blank" rel="noreferrer noopener">{children}</a>,
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-  table: ({ children }) => <div className="markdown-table-wrap"><table>{children}</table></div>,
+  table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
   img: ({ src, alt }) => typeof src === 'string' && src ? <InlineImages images={[{ url: src, alt: alt || 'Image' }]} /> : <span>Image unavailable</span>,
 }
 

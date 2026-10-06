@@ -1,10 +1,10 @@
 import { Box, Globe, X } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { chatResources } from './chat-resources'
 import type { StreamEvent } from './types'
 
 export function ChatSummary({ events, onClose, onOutputs }: { events: StreamEvent[]; onClose: () => void; onOutputs: () => void }) {
-  const { sources, outputs } = chatResources(events)
+  const { sources, outputs } = useMemo(() => chatResources(events), [events])
   const [allSources, setAllSources] = useState(false)
   return <aside id="chat-summary" className="chat-summary" aria-label="Sources and outputs" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
     <button className="icon-button summary-close" aria-label="Close sources and outputs" onClick={onClose}><X size={15} /></button>

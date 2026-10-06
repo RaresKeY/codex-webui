@@ -150,3 +150,11 @@ def test_activity_socket_delivers_jev_events_without_transcript_deltas(client):
         client.portal.call(client.app.state.codex._publish, {'method': 'item/agentMessage/delta', 'params': {'threadId': 'chat', 'delta': 'private'}})
         client.portal.call(client.app.state.codex._publish, event)
         assert socket.receive_json() == event
+        socket.close()
+        async def disconnected():
+            for _ in range(100):
+                if not client.app.state.codex._subscribers:
+                    return
+                await asyncio.sleep(.01)
+            raise AssertionError('Activity subscriber was not removed after disconnect')
+        client.portal.call(disconnected)

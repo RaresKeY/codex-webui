@@ -117,15 +117,18 @@ def main():
                 bidi.command('browsingContext.navigate', {'context':context,'url':url,'wait':'complete'})
                 wait("document.querySelector('.chat-title') !== null")
                 click('.chat-title')
-                wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && document.querySelector('.message-jev-process') !== null")
+                wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && !document.querySelector('.message-jev-process')")
                 assert not evaluate("Boolean(document.querySelector('.context-panel'))")
                 assert not evaluate("Boolean(document.querySelector('.jev-turn-step'))")
-                assert evaluate("document.querySelector('.message-author .message-jev-process') !== null")
+                assert not evaluate("Boolean(document.querySelector('.message-author .message-jev-process'))")
                 if not args.baseline_bundle:
                     opener = evaluate("(() => {const b=document.querySelector('.context-panel-toggle'),r=b.getBoundingClientRect();return {width:r.width,height:r.height,expanded:b.getAttribute('aria-expanded'),right:r.right};})()")
                     assert opener['width'] >= 40 and opener['height'] >= 40 and opener['expanded'] == 'false' and opener['right'] <= 1440, opener
                     screenshot('closed.png')
-                click('.message-jev-process')
+                click('[aria-label="Open context panel"]')
+                evaluate("(() => { [...document.querySelectorAll('.context-tool-tabs button')].find(b => b.textContent === 'Jev').click(); return true })()")
+                wait("document.querySelectorAll('.jev-record').length === 3")
+                click('.jev-record > summary')
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 3 && document.querySelector('.jev-record[open]') !== null")
                 assert evaluate("document.querySelectorAll('.jev-record[open] progress').length === 7")
                 assert evaluate("document.querySelector('.jev-preparation').textContent.includes('Up-to-date information') && document.querySelector('.jev-preparation').textContent.includes('Useful')")
@@ -137,6 +140,14 @@ def main():
                     geometry = evaluate("(() => {const p=document.querySelector('.context-panel'),r=p.getBoundingClientRect(),m=document.querySelector('.content-area').getBoundingClientRect(),c=getComputedStyle(p);return {top:r.top,bottom:r.bottom,right:r.right,left:r.left,mainRight:m.right,radius:c.borderRadius,shadow:c.boxShadow,margin:c.margin};})()")
                     assert geometry['top'] == 0 and geometry['bottom'] == 1000 and geometry['right'] == 1440 and geometry['left'] == geometry['mainRight'], geometry
                     assert geometry['radius'] == '0px' and geometry['shadow'] == 'none' and geometry['margin'] == '0px', geometry
+                separator = evaluate("(() => {const r=document.querySelector('.context-resize-handle').getBoundingClientRect();return {x:Math.round(r.x+4),y:200,width:document.querySelector('.context-panel').getBoundingClientRect().width}})()")
+                bidi.command('input.performActions', {'context':context,'actions':[{'type':'pointer','id':'resize-mouse','parameters':{'pointerType':'mouse'},'actions':[{'type':'pointerMove','origin':'viewport','x':separator['x'],'y':separator['y']},{'type':'pointerDown','button':0},{'type':'pointerMove','origin':'viewport','x':separator['x']-100,'y':separator['y'],'duration':200},{'type':'pointerUp','button':0}]}]})
+                wait(f"Math.abs(document.querySelector('.context-panel').getBoundingClientRect().width-{separator['width']+100}) < 2")
+                evaluate("(() => {document.querySelector('.context-resize-handle').focus();return true})()")
+                key('\ue012')
+                wait(f"Math.abs(document.querySelector('.context-panel').getBoundingClientRect().width-{separator['width']+116}) < 2")
+                screenshot('desktop-resized.png')
+                evaluate("(() => {document.querySelector('.context-resize-handle').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));return true})()")
                 screenshot('desktop.png')
                 if not args.baseline_bundle:
                     evaluate("(() => {document.querySelector('[aria-label=\"Close context panel\"]').focus();return true;})()")

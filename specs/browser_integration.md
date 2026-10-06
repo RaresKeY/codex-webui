@@ -45,6 +45,8 @@ The original implementation pass passed 58 backend tests and 43 frontend tests. 
 
 The visible Browser sits in the flush context region with square outer edges, a neutral conversation divider and compact aligned pane controls. At narrow widths it attaches directly to the screen edges; automatic opening, frame cadence and cursor motion retain their existing behavior.
 
+Closing or switching away from a browser pane aborts its pending client action. A synchronous guard prevents duplicate actions, and generation checks discard frame responses predating a completed action. Event streams back off for one second on clean EOF as well as transport failure, avoiding a tight reconnect loop.
+
 ## Gaps
 
 - The page is a periodically refreshed screenshot, with view-only pixels; full interactive browser input, multiple tabs, uploads, downloads, popup/frame workflows and mobile page emulation are absent.

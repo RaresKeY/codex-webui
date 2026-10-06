@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, Globe, MousePointer2, RefreshCw, X } from 'lucide-react'
 
 export interface BrowserState {
@@ -17,6 +17,10 @@ export interface BrowserState {
 export interface BrowserSignal extends BrowserState { threadId: string; action: string }
 
 export function BrowserContext({ threadId, signal }: { threadId?: string; signal: BrowserSignal | null }) {
+  const generation = useRef(0)
+  const actionController = useRef<AbortController | null>(null)
+  const actionBusy = useRef(false)
+  useEffect(() => () => { actionController.current?.abort() }, [])
   const [state, setState] = useState<BrowserState | null>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -27,13 +31,14 @@ export function BrowserContext({ threadId, signal }: { threadId?: string; signal
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout>
     const refresh = async () => {
+      const requestedGeneration = generation.current
       try {
         const response = await fetch(`/api/threads/${encodeURIComponent(threadId)}/browser`, { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) throw new Error('Browser view unavailable. Try reopening the browser.')
         const next = await response.json() as BrowserState
-        if (!controller.signal.aborted) { setState(next); setFrameError('') }
+        if (!controller.signal.aborted && requestedGeneration === generation.current) { setState(next); setFrameError('') }
       } catch (reason) {
-        if (!controller.signal.aborted) setFrameError(reason instanceof Error ? reason.message : 'Browser unavailable')
+        if (!controller.signal.aborted && requestedGeneration === generation.current) setFrameError(reason instanceof Error ? reason.message : 'Browser unavailable')
       } finally {
         if (!controller.signal.aborted) timer = setTimeout(() => { void refresh() }, 650)
       }
@@ -42,17 +47,19 @@ export function BrowserContext({ threadId, signal }: { threadId?: string; signal
     return () => { controller.abort(); clearTimeout(timer) }
   }, [threadId])
   const act = async (action: string, targetUrl?: string) => {
-    if (!threadId) return
+    if (!threadId || actionBusy.current) return
+    actionBusy.current = true; generation.current++
+    const controller = new AbortController(); actionController.current = controller
     setBusy(true); setError('')
     try {
       const response = await fetch(`/api/threads/${encodeURIComponent(threadId)}/browser`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...(targetUrl ? { url: targetUrl } : {}) }),
+        signal: controller.signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...(targetUrl ? { url: targetUrl } : {}) }),
       })
       if (!response.ok) throw new Error('Could not complete browser action. Check the HTTPS URL and local browser runtime.')
-      setState(await response.json() as BrowserState)
-      setUrl(null)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Browser action failed') }
-    finally { setBusy(false) }
+      const next = await response.json() as BrowserState
+      if (!controller.signal.aborted) { generation.current++; setState(next); setUrl(null) }
+    } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Browser action failed') }
+    finally { actionBusy.current = false; if (!controller.signal.aborted) setBusy(false) }
   }
   const navigate = (event: FormEvent) => { event.preventDefault(); if (url?.trim()) void act('open', url.trim()) }
   const currentSignal = signal?.threadId === threadId ? signal : null

@@ -48,3 +48,15 @@ it('offers a native turn branch only at its last visible reply, including legacy
   expect(isResponseBranchPoint([earlier, final], final)).toBe(true)
   expect(isResponseBranchPoint([{ ...earlier, meta: {} }], earlier)).toBe(false)
 })
+
+it('preserves work order across approval boundaries and ignores empty trailing replies', () => {
+  const entries = groupTurnFeed([item('before', 'command'), item('approval', 'approval'), item('after', 'command')])
+  expect(entries.map(entry => entry.type === 'work' ? entry.events.map(event => event.id) : entry.event.id)).toEqual([['before'], 'approval', ['after']])
+  const answer = { ...item('answer', 'message'), role: 'assistant' as const }
+  expect(isResponseBranchPoint([answer, { ...answer, id: 'empty', content: '' }], answer)).toBe(true)
+})
+it('does not collect links from code examples or unterminated fences', () => {
+  const answer = item('answer', 'message')
+  answer.content = '[Real](https://real.org)\n\n`[Inline](https://inline.org)`\n\n```md\n[Example](https://example.org)\n```\n\n    [Indented](https://indented.org)\n\n~~~\n[Unclosed](https://unclosed.org)'
+  expect(chatResources([answer]).sources.map(source => source.url)).toEqual(['https://real.org/'])
+})

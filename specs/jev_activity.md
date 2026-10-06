@@ -4,7 +4,7 @@ Owners: `backend/app/jev_activity.py`, `chat_service.py`, `task_router.py`, `dat
 
 ## Behavior
 
-Jev is a context sidebar for the selected chat. An assistant response with a matching native Auto turn record has a small “Jev process ›” link immediately after its model/effort label. Clicking opens that exact run in the sidebar. There is no separate top-of-turn Jev status row. Records without a native turn remain available in the sidebar; they are not attached to an unrelated response. Manual selections have honestly labeled sidebar records and no Jev process response link. Earlier turns have no reconstructed records.
+Jev is a context sidebar for the selected chat, available only from its sidebar tab. Responses contain no Jev process link or separate routing row. Records expand manually in the sidebar; earlier turns have no reconstructed records.
 
 The process shows routing → native model acknowledgement → turn submission, alongside model/effort, decision probabilities and confidence, classifier token usage, policy, duration, information-needs diagnostics and native identifiers. It does not claim that advisory search/context diagnostics execute preparation. The sidebar begins collapsed and opens explicitly from the response model link or navigation. Selection and records belong to their chat; switching chats does not reuse another chat’s details.
 
