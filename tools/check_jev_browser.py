@@ -117,13 +117,15 @@ def main():
                 bidi.command('browsingContext.navigate', {'context':context,'url':url,'wait':'complete'})
                 wait("document.querySelector('.chat-title') !== null")
                 click('.chat-title')
-                wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && document.querySelector('.jev-turn-step') !== null")
+                wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && document.querySelector('.message-jev-process') !== null")
                 assert not evaluate("Boolean(document.querySelector('.context-panel'))")
+                assert not evaluate("Boolean(document.querySelector('.jev-turn-step'))")
+                assert evaluate("document.querySelector('.message-author .message-jev-process') !== null")
                 if not args.baseline_bundle:
                     opener = evaluate("(() => {const b=document.querySelector('.context-panel-toggle'),r=b.getBoundingClientRect();return {width:r.width,height:r.height,expanded:b.getAttribute('aria-expanded'),right:r.right};})()")
                     assert opener['width'] >= 40 and opener['height'] >= 40 and opener['expanded'] == 'false' and opener['right'] <= 1440, opener
                     screenshot('closed.png')
-                click('.jev-turn-step')
+                click('.message-jev-process')
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 3 && document.querySelector('.jev-record[open]') !== null")
                 assert evaluate("document.querySelectorAll('.jev-record[open] progress').length === 7")
                 assert evaluate("document.querySelector('.jev-preparation').textContent.includes('Up-to-date information') && document.querySelector('.jev-preparation').textContent.includes('Useful')")

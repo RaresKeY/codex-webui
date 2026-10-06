@@ -77,6 +77,10 @@ Core browser regression passed at 1440×1000 and 390×844, including one routed 
 
 The image was deployed through the owning rootless wrapper to the existing private Tailscale URL. HTTPS health, connected Codex/browser availability, exact built HTML/assets, strict fork request schema and same-origin WebSocket success/foreign-origin rejection were checked. No active native chats were reported before the short restart. Existing data/credential mounts and the pre-change `before-turn-ui` rollback image were preserved; no remote fetch, push or upstream update occurred. Generated local frontend build files are removed after verification.
 
+## Inline Jev process link
+
+The separate Jev transcript row is removed. Auto responses with a matching native turn now place “Jev process ›” immediately after the model/effort label. `tools/check_jev_browser.py` checks the absence of the old row and presence of the new inline control, then verifies exact-run opening, event updates, no polling, chat isolation, pagination, errors and desktop/390px/320px layouts. The runtime image passed 198 backend and 102 frontend tests plus lint/type/build and offline lifecycle checks. The existing private deployment was verified against the exact new built assets, connected Codex/browser, HTTPS health and WebSocket origin checks. Evidence is under `evidence/ui/jev-response-link/`; no paid inference or upstream update was performed.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

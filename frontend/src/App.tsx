@@ -13,8 +13,8 @@ import { deriveConversationTitle, isUntitledConversation } from './conversation-
 import { chatImageAssets, type ChatImageAsset } from './chat-images'
 import { readUnreadChats, saveUnreadChats } from './unread-chats'
 import { ArchivedChats } from './ArchivedChats'
-import { JevContext, JevTurnStep } from './JevContext'
-import { EMPTY_JEV_CHAT, mergeActivity, jevTranscript, type JevActivity, type JevChatState } from './jev-activity'
+import { JevContext } from './JevContext'
+import { EMPTY_JEV_CHAT, mergeActivity, type JevActivity, type JevChatState } from './jev-activity'
 import { LaunchPad } from './LaunchPad'
 import { ChatActivityMark } from './ChatActivityMark'
 import { recoverChatActivity, reconcileChat, reduceChatActivity, type ChatActivity } from './chat-activity'
@@ -177,7 +177,7 @@ function CommandGroup({ commands }: { commands: StreamEvent[] }) {
   </details>
 }
 
-function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBranch }: { event: StreamEvent; conversationId: string; cwd: string; fallbackModel: string; onApproval: (id: string, approved: boolean) => void; onBranch?: (turnId: string) => Promise<void> }) {
+function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBranch, onJevProcess }: { event: StreamEvent; conversationId: string; cwd: string; fallbackModel: string; onApproval: (id: string, approved: boolean) => void; onBranch?: (turnId: string) => Promise<void>; onJevProcess?: () => void }) {
   const [responding, setResponding] = useState(false)
   const [branching, setBranching] = useState(false)
   const [branchError, setBranchError] = useState('')
@@ -206,7 +206,7 @@ function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBr
     return <article className={`message ${event.role ?? 'assistant'} ${event.state ?? ''} ${assistantRunning ? 'streaming' : ''}`}>
       <div className="message-avatar">{event.role === 'user' ? <UserRound size={17} /> : <Bot size={17} />}</div>
       <div className="message-body">
-        <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{event.role !== 'user' && <MessageModel model={messageModel} effort={messageEffort} />}<time>{event.timestamp}</time></div>
+        <div className="message-author">{event.role === 'user' ? 'You' : 'Codex'}{event.role !== 'user' && <MessageModel model={messageModel} effort={messageEffort} />}{onJevProcess && <button className="message-jev-process" onClick={onJevProcess} aria-label="Open Jev process">Jev process<ChevronRight size={12} /></button>}<time>{event.timestamp}</time></div>
         {event.content
           ? event.role === 'user'
             ? <p>{event.content}</p>
@@ -369,7 +369,7 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, jevItems, onOpenJev, vi
       if (mounted.current) setRoutingStage(null)
     }
   }
-  const feedEntries = groupTurnFeed(jevTranscript(events, jevItems))
+  const feedEntries = groupTurnFeed(events.filter(event => !event.meta?.jevActivityId))
   const latestReply = events.filter(event => event.role === 'assistant' && (event.kind === 'message' || event.kind === 'image')).at(-1)
   const recordedSelection = typeof latestReply?.meta?.model === 'string' && typeof latestReply.meta.effort === 'string'
     ? { model: latestReply.meta.model, effort: latestReply.meta.effort }
@@ -387,9 +387,12 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, jevItems, onOpenJev, vi
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       {events.length === 0 && <div className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>A clear space to think, create, and get things done.</p><div className="welcome-hints"><span><Code2 size={16} />Build something</span><span><Search size={16} />Explore a project</span><span><Sparkles size={16} />Refine an idea</span></div></div>}
       {feedEntries.map(entry => {
-        const renderEvent = (event: StreamEvent) => event.meta?.jevActivityId
-          ? <JevTurnStep key={event.id} item={jevItems.find(item => item.id === event.meta?.jevActivityId)!} onOpen={() => onOpenJev(Number(event.meta?.jevActivityId))} />
-          : <EventCard key={event.id} event={event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} onBranch={isResponseBranchPoint(events, event) ? onBranch : undefined} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: `${item.content}\n${approved ? 'Approved for this run.' : 'Denied.'}` } : item))} />
+        const renderEvent = (event: StreamEvent) => {
+          const jevRun = event.role === 'assistant' && event.meta?.phase !== 'commentary' && typeof event.meta?.turnId === 'string'
+            ? jevItems.find(item => item.source === 'auto' && item.turn_id === event.meta?.turnId)
+            : undefined
+          return <EventCard key={event.id} event={event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} onBranch={isResponseBranchPoint(events, event) ? onBranch : undefined} onJevProcess={jevRun ? () => onOpenJev(jevRun.id) : undefined} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: `${item.content}\n${approved ? 'Approved for this run.' : 'Denied.'}` } : item))} />
+        }
         if (entry.type === 'event') return renderEvent(entry.event)
         return <details className="turn-work" key={`work-${entry.id}`}><summary><span>{workLabel(entry.events, turnActive && turn.turnId === entry.id)}</span><ChevronRight size={14} className="disclosure-chevron" /></summary><div className="turn-work-items">{groupEventFeed(entry.events).map(item => item.type === 'commands' ? <CommandGroup key={item.id} commands={item.commands} /> : renderEvent(item.event))}</div></details>
       })}

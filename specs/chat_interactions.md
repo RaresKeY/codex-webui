@@ -22,7 +22,7 @@ Before spending on Jev, selected IDs resolve against fresh catalogs and require 
 
 ## Presentation
 
-Auto turns include one Jev process step at the actual routing call. It opens the matching run in the contextual sidebar, with event-driven stage updates and no timed history refresh. Manual selection does not invent a Jev call. See `jev_activity.md`.
+Auto responses include a small Jev process link beside their selected model/effort label, matched by native turn ID. It opens the matching run in the contextual sidebar, with event-driven stage updates and no timed history refresh. There is no separate transcript routing row; manual selection does not invent a Jev call. See `jev_activity.md`.
 
 Markdown table and code headers use the sidebar's neutral dark surface. Shared surface, border, text, interaction and semantic colors are centralized in `frontend/src/theme.css`; see `color_theme.md`. Wide tables retain contained horizontal scrolling.
 

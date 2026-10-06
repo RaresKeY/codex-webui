@@ -828,3 +828,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .turn-work[open] > summary .disclosure-chevron { transform: rotate(90deg); }
 .turn-work-items > * { width: 100%; margin-left: 0; margin-right: 0; }
 .turn-work-items .message-author { display: none; }
+
+.message-jev-process { display: inline-flex; align-items: center; gap: 2px; min-height: 40px; padding: 0 4px; border: 0; background: transparent; color: var(--subtle); font-size: 11px; cursor: pointer; }
+.message-jev-process:hover { color: var(--text); }
+.message-author:has(.message-jev-process) { flex-wrap: wrap; margin-top: -8px; margin-bottom: 0; }
