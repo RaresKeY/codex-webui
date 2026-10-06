@@ -1,0 +1,18 @@
+{
+  "syntheticFixtures": true,
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "320x640"
+  ],
+  "forks": [
+    {
+      "turn_id": "early"
+    },
+    {
+      "turn_id": "early"
+    }
+  ],
+  "modelCalls": 0,
+  "uncaughtErrors": 0
+}

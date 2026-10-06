@@ -143,6 +143,11 @@ def main():
                 evaluate("(() => {document.querySelector('.command-card > summary').focus();return true})()")
                 key('\ue007')
                 assert evaluate("document.querySelector('.command-card').open && document.querySelector('.command-card-body').textContent.includes('Shell') && document.querySelector('.command-card-body').textContent.includes('Success') && document.querySelector('.command-card-body pre').scrollHeight > document.querySelector('.command-card-body pre').clientHeight")
+                assert evaluate("(() => {const group=document.querySelector('.command-group > summary').getBoundingClientRect(),row=document.querySelector('.command-card > summary').getBoundingClientRect();return row.left>group.left && row.left-group.left<=24 && row.height<=32})()")
+                wait("[...document.querySelectorAll('.activity-disclosure[open] > summary > .disclosure-chevron')].every(s => getComputedStyle(s).transform === 'matrix(0, 1, -1, 0, 0, 0)')")
+                arrow_geometry = evaluate("[...document.querySelectorAll('.activity-disclosure > summary')].filter(s => s.getBoundingClientRect().height > 0).map(s => {const label=s.querySelector('.activity-label').getBoundingClientRect(),arrow=s.querySelector('.disclosure-chevron').getBoundingClientRect();return {label:s.textContent,gap:arrow.left-label.right,row:s.getBoundingClientRect().width}})")
+                assert all(abs(row['gap']-7)<2 for row in arrow_geometry), arrow_geometry
+                assert evaluate("(() => {const p=document.querySelector('.command-card-body pre');p.scrollTop=p.scrollHeight;return parseFloat(getComputedStyle(p).paddingBottom)>=16 && p.getBoundingClientRect().bottom-p.querySelector('code').getBoundingClientRect().bottom>=12})()")
                 screenshot('desktop-command-expanded.png')
                 click('.command-card > summary')
                 click('.command-card.failed > summary')

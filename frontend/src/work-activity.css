@@ -1,0 +1,35 @@
+/* Shared activity hierarchy. Keep row geometry and native output scrolling here. */
+.activity-disclosure { min-width: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.activity-disclosure > summary { list-style: none; display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 0; color: var(--muted); font-size: 12px; cursor: pointer; user-select: none; }
+.activity-disclosure > summary::-webkit-details-marker { display: none; }
+.activity-disclosure > summary:hover { color: var(--text); }
+.activity-disclosure > summary:focus-visible { outline: 1px solid var(--line-focus); outline-offset: 2px; border-radius: 4px; }
+.activity-disclosure > summary > svg { flex-shrink: 0; }
+.activity-label { min-width: 0; flex: 0 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 400; }
+.activity-disclosure .disclosure-chevron { flex-shrink: 0; color: var(--subtle); transition: transform 160ms ease; }
+.activity-disclosure[open] > summary > .disclosure-chevron { transform: rotate(90deg); }
+.command-failure { color: var(--danger); font-size: 11px; flex-shrink: 0; }
+.command-group, .command-card { margin: 0; }
+.command-group-items { display: grid; gap: 2px; margin-left: 7px; padding-left: 12px; border-left: 1px solid var(--line-soft); }
+.command-card-body { margin: 4px 0 8px 19px; padding: 12px 14px 10px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--panel); min-width: 0; }
+.command-card-body header { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.command-card-body pre { margin: 0; padding: 0 0 16px; max-height: 320px; overflow: auto; scrollbar-gutter: stable; background: transparent; }
+.command-card-body code { display: block; color: var(--text-secondary); font: 12px/1.65 ui-monospace, monospace; white-space: pre; }
+.command-card-body footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--subtle); }
+.command-card.failed .command-card-body footer span:last-child { color: var(--danger); }
+.activity-reasoning { margin-left: 7px; padding: 4px 0 4px 12px; border-left: 1px solid var(--line-soft); }
+@media (max-width: 600px) { .command-card-body { padding: 10px 12px; } .command-card-body pre { max-height: 260px; } }
+@media (pointer: coarse) { .activity-disclosure > summary { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .activity-disclosure .disclosure-chevron { transition: none; } }
+
+.turn-work { margin: 8px 0 14px; border-bottom: 1px solid var(--line-soft); }
+.turn-work-items { display: grid; gap: 4px; padding: 6px 0 10px; }
+.turn-work-items > * { width: 100%; margin-left: 0; margin-right: 0; }
+.turn-work-items .message { margin: 0; }
+.turn-work-items .message-author { display: none; }
+.turn-work-items .message-rendered, .turn-work-items .markdown-content { margin: 0; }
+.turn-work-items .markdown-content { font-size: 14px; line-height: 1.55; }
+.turn-work-items .markdown-content p { margin: 0 0 6px; }
+.search-step { display: flex; align-items: center; gap: 7px; min-height: 30px; color: var(--muted); font-size: 12px; }
+.search-step > svg, .search-step > span { flex-shrink: 0; }
+.search-step small { min-width: 0; color: var(--subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

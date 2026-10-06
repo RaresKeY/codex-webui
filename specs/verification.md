@@ -89,6 +89,10 @@ Command groups are compact Ran/Running N commands rows; opening reveals one-line
 
 The current review removes all inline Jev process controls, adds a pointer/keyboard sidebar separator, compact aligned work/search rows and independent table soft wrapping. Work remains ordered around approvals, branch metadata copies atomically, and browser actions/stream reconnects have lifecycle guards. The runtime passed 200 backend and 104 frontend tests with lint/type/build and offline native lifecycle checks. Production bundle browser fixtures cover desktop, 390px and 320px, including real drag and keyboard resizing and wrap on/off without inference. See `evidence/ui/review-polish/review.md`. The older inline-link evidence records the superseded implementation.
 
+## Shared work activity presentation
+
+`WorkActivity.tsx` and `work-activity.css` replace duplicated activity markup and historical style overrides. `tools/check_turn_browser.py` verifies row height, child indentation, label-adjacent arrows and scroll-bottom text clearance at desktop/390px/320px alongside existing turn/summary/branch checks. Core chat checks also pass. Evidence is in `evidence/ui/work-activity/`; the focused ownership and behavior contract is `work_activity.md`.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

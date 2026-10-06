@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | [jev_routing.md](jev_routing.md) | Backend-enforced text-chat path | V5 Auto policy, per-chat manual selection, acknowledged model change and exact user ask |
 | [jev_activity.md](jev_activity.md) | Implemented bounded metadata | Per-chat Jev sidebar, turn-linked process, event-driven stages and safe decision history |
+| [work_activity.md](work_activity.md) | Implemented shared UI | Turn/command/file/reasoning disclosures, hierarchy, compact rows and native output scrolling |
 | [turn_presentation.md](turn_presentation.md) | Implemented bounded subset | Pinned sources/outputs, work disclosures, response timestamps and native turn branches |
 | [chat_management.md](chat_management.md) | Implemented | Native archive/restore/delete, confirmations and project deletion |
 | [project_launch.md](project_launch.md) | Implemented | Project prompting, name-first creation, unassigned chats and actual last-model labels |

@@ -1,3 +1,4 @@
+import { ActivityDisclosure, CommandCard, CommandGroup, FileChangeActivity, ReasoningActivity, SearchActivity } from './WorkActivity'
 import { ContextResizeHandle } from './ContextResizeHandle'
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from 'react'
 import {
@@ -152,29 +153,6 @@ function MessageModel({ model, effort }: { model: string; effort?: string }) {
   return <span className="message-model" title={`Model used: ${model} · Reasoning effort: ${effort ?? 'not recorded for this message'}`}><Cpu size={10} /><span>{model}</span><span className="message-effort">· {effort ?? 'effort unknown'}</span></span>
 }
 
-function CommandCard({ event }: { event: StreamEvent }) {
-  const [expanded, setExpanded] = useState(false)
-  const command = event.command ?? event.content.split('\n').find(line => line.trim())?.trim() ?? event.title ?? 'Command'
-  const commandLine = command.replace(/\s+/g, ' ').trim() || 'Command'
-  const output = event.state !== 'running' && event.commandOutput !== undefined ? event.commandOutput : event.content.startsWith(command) ? event.content.slice(command.length).replace(/^\n/, '') : event.content
-  const exitCode = typeof event.meta?.exitCode === 'number' ? event.meta.exitCode : undefined
-  const failed = event.state === 'failed' || exitCode !== undefined && exitCode !== 0
-  const status = event.state === 'running' ? 'Running' : failed ? exitCode !== undefined ? `Exit ${exitCode}` : 'Failed' : exitCode === 0 ? 'Success' : 'Completed'
-  return <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className={`command-card ${event.state ?? ''} ${failed ? 'failed' : ''}`}>
-    <summary title={`${commandLine} · ${status}`}><Terminal size={15} /><span className="command-line">{event.state === 'running' ? 'Running' : 'Ran'} {commandLine}</span>{failed && <span className="command-failure">Failed</span>}<ChevronRight size={14} className="disclosure-chevron" /></summary>
-    <div className="command-card-body"><header>Shell</header><pre><code><span className="prompt">$</span> {command}{output ? `\n\n${output}` : ''}</code></pre><footer><span>{typeof event.meta?.durationMs === 'number' ? `${(event.meta.durationMs / 1000).toFixed(1)}s` : ''}</span><span>{status}</span></footer></div>
-  </details>
-}
-
-function CommandGroup({ commands }: { commands: StreamEvent[] }) {
-  const running = commands.some(command => command.state === 'running')
-  const failures = commands.filter(command => command.state === 'failed' || typeof command.meta?.exitCode === 'number' && command.meta.exitCode !== 0).length
-  return <details className={`command-group ${running ? 'running' : failures ? 'failed' : 'done'}`}>
-    <summary><Terminal size={15} /><span className="command-group-label">{running ? 'Running' : 'Ran'} {commands.length} commands</span>{failures > 0 && <span className="command-failure">{failures} failed</span>}<ChevronRight size={14} className="disclosure-chevron" /></summary>
-    <div className="command-group-items">{commands.map(command => <CommandCard event={command} key={command.id} />)}</div>
-  </details>
-}
-
 function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBranch }: { event: StreamEvent; conversationId: string; cwd: string; fallbackModel: string; onApproval: (id: string, approved: boolean) => void; onBranch?: (turnId: string) => Promise<void> }) {
   const [responding, setResponding] = useState(false)
   const [branching, setBranching] = useState(false)
@@ -216,11 +194,11 @@ function EventCard({ event, conversationId, cwd, fallbackModel, onApproval, onBr
       </div>
     </article>
   }
-  if (event.kind === 'search') return <div className="search-step"><Globe size={15} /><span>{event.title ?? 'Searched the web'}</span>{event.content && <small>{event.content}</small>}</div>
+  if (event.kind === 'search') return <SearchActivity event={event} />
   if (event.kind === 'command') return <CommandCard event={event} />
-  if (event.kind === 'file') return <details className={`file-change-disclosure ${event.state ?? ''}`}><summary><FileCode2 size={15} /><span>{event.state === 'running' ? 'Changing' : event.state === 'failed' ? 'Failed changes to' : 'Changed'} {event.outputPaths?.length ? `${event.outputPaths.length} ${event.outputPaths.length === 1 ? 'file' : 'files'}` : 'workspace files'}</span>{event.state === 'failed' && <span className="command-failure">Failed</span>}<ChevronRight size={14} className="disclosure-chevron" /></summary><div className="command-card-body"><header>Changes</header><pre><code>{event.content}</code></pre></div></details>
+  if (event.kind === 'file') return <FileChangeActivity event={event} />
   if (event.kind === 'reasoning' && !event.content) return null
-  if (event.kind === 'reasoning') return <details className="reasoning-disclosure"><summary><Sparkles size={15} /><span>Thought summary</span><ChevronRight size={14} className="disclosure-chevron" /></summary><MarkdownContent source={event.content} compact cwd={cwd} /></details>
+  if (event.kind === 'reasoning') return <ReasoningActivity event={event} cwd={cwd} />
   const Icon = eventIcons[event.kind]
   return <article className={`event-card ${event.kind} ${event.state ?? ''}`}>
     <div className="event-icon"><Icon size={15} /></div>
@@ -396,7 +374,7 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, visible, conversation, 
           return <EventCard key={event.id} event={event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} onBranch={branchPoints.has(event.id) ? onBranch : undefined} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: `${item.content}\n${approved ? 'Approved for this run.' : 'Denied.'}` } : item))} />
         }
         if (entry.type === 'event') return renderEvent(entry.event)
-        return <details className="turn-work" key={`work-${entry.id}`}><summary><span>{workLabel(entry.events, turnActive && turn.turnId === entry.events[0]?.meta?.turnId)}</span><ChevronRight size={14} className="disclosure-chevron" /></summary><div className="turn-work-items">{groupEventFeed(entry.events).map(item => item.type === 'commands' ? <CommandGroup key={item.id} commands={item.commands} /> : renderEvent(item.event))}</div></details>
+        return <ActivityDisclosure className="turn-work" key={`work-${entry.id}`} label={workLabel(entry.events, turnActive && turn.turnId === entry.events[0]?.meta?.turnId)}><div className="turn-work-items">{groupEventFeed(entry.events).map(item => item.type === 'commands' ? <CommandGroup key={item.id} commands={item.commands} /> : renderEvent(item.event))}</div></ActivityDisclosure>
       })}
       {(routingStage || turnActive || historyLoading) && <div className="chat-progress" role="status" aria-live="polite"><RefreshCw size={14} className="spin" /><span>{routingStage === 'routing' ? 'Choosing the right model…' : routingStage === 'switching' ? `Switching to ${decision?.model}…` : routingStage === 'sending' ? 'Sending your message…' : turnActive ? turn.phase === 'streaming' ? 'Responding…' : 'Thinking…' : 'Loading conversation…'}</span></div>}
       <div ref={endRef} />
