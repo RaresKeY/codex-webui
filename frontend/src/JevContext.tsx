@@ -13,9 +13,7 @@ function Probabilities({ title, values }: { title: string; values?: Record<strin
   return <section className="jev-probabilities"><h4>{title}</h4>{Object.entries(values).map(([label, value]) => <div key={label}><span>{label.replace('gpt-', '')}</span><progress max="1" value={value} aria-label={`${label} probability`} /><strong>{percentage(value)}</strong></div>)}</section>
 }
 
-function ActivityRecord({ item, selected }: { item: JevActivity; selected: boolean }) {
-  const details = useRef<HTMLDetailsElement>(null)
-  useEffect(() => { if (selected && details.current) { details.current.open = true; details.current.scrollIntoView({ block: 'nearest' }) } }, [selected])
+function ActivityRecord({ item }: { item: JevActivity }) {
   const [turn, setTurn] = useState<JevTurn>()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -31,7 +29,7 @@ function ActivityRecord({ item, selected }: { item: JevActivity; selected: boole
   }
   const decision = item.decision
   const source = { auto: 'Jev auto', manual: 'Manual selection', preview: 'Routing preview' }[item.source]
-  return <details ref={details} className="jev-record"><summary><span className="jev-record-copy"><strong>{decision?.model?.replace('gpt-', '') ?? 'Awaiting selection'}{decision?.effort && ` · ${decision.effort}`}</strong><span>{source}</span></span><span className={`jev-status ${item.status}`}>{activityStatus(item)}</span></summary>
+  return <details className="jev-record" data-activity-id={item.id}><summary><span className="jev-record-copy"><strong>{decision?.model?.replace('gpt-', '') ?? 'Awaiting selection'}{decision?.effort && ` · ${decision.effort}`}</strong><span>{source}</span></span><span className={`jev-status ${item.status}`}>{activityStatus(item)}</span><ChevronRight size={14} className="jev-disclosure-chevron" aria-hidden="true" /></summary>
     <div className="jev-record-details"><ol className="jev-process-flow" aria-label="Preparation stages">{(['routing', 'switching', 'sending'] as const).map((stage, index) => {
       const current = ['routing', 'switching', 'sending'].indexOf(item.stage)
       const status = index < current || item.status === 'submitted' ? 'complete' : index === current ? item.status === 'pending' ? 'active' : 'stopped' : 'waiting'
@@ -52,13 +50,13 @@ function ActivityRecord({ item, selected }: { item: JevActivity; selected: boole
   </details>
 }
 
-export function JevContext({ threadId, state, selectedId, onLoad }: { threadId?: string; state: JevChatState; selectedId?: number; onLoad: (before?: number) => void }) {
+export function JevContext({ threadId, state, onLoad }: { threadId?: string; state: JevChatState; onLoad: (before?: number) => void }) {
   return <section className="jev-context" id="context-tool-jev" role="tabpanel" aria-label="Jev process">
     <div className="jev-context-heading"><h3>This chat’s Jev process</h3><button type="button" className="icon-button" aria-label="Reload Jev history" disabled={!threadId || state.loading} onClick={() => onLoad()}><RefreshCw size={15} /></button></div>
     <p className="jev-hint">Each run belongs to a turn. Updates arrive when Jev runs. Earlier turns have no reconstructed routing record; manual selections skip Jev.</p>
     {state.error && <p className="notice" role="alert">{state.error}</p>}
     {!state.items.length && !state.error && <p className="jev-empty" role="status"><Activity size={24} />{!threadId ? 'Open a chat to see its Jev process.' : state.loading ? 'Loading this chat’s Jev history…' : 'No Jev runs in this chat yet.'}</p>}
-    <div className="jev-list">{state.items.map(item => <ActivityRecord key={item.id} item={item} selected={item.id === selectedId} />)}</div>
+    <div className="jev-list">{[...state.items].sort((a, b) => a.id - b.id).map(item => <ActivityRecord key={item.id} item={item} />)}</div>
     {state.cursor !== null && <button type="button" className="button jev-more" disabled={state.loading} onClick={() => onLoad(state.cursor!)}>Load older runs</button>}
   </section>
 }

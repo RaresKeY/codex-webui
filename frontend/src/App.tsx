@@ -503,7 +503,7 @@ function SideChatsContext({ conversations, current, onSelect }: { conversations:
   </section>
 }
 
-function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal, jevState, selectedJev, onLoadJev }: { jevState: JevChatState; selectedJev?: number; onLoadJev: (before?: number) => void; browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
+function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal, jevState, onLoadJev }: { jevState: JevChatState; onLoadJev: (before?: number) => void; browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
   const [tree, setTree] = useState(files)
   const [treeError, setTreeError] = useState('')
   const [selected, setSelected] = useState<WorkspaceFile | null>(null)
@@ -570,7 +570,7 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
         return <button key={tool.id} role="tab" aria-selected={activeTool === tool.id} aria-controls={`context-tool-${tool.id}`} className={activeTool === tool.id ? 'active' : ''} onClick={() => onToolChange(tool.id)} title={`${tool.label} · ${tool.backing}`}><Icon size={15} /><span>{tool.label}</span>{tool.id === 'changes' && <i>{reportedChanges.length}</i>}</button>
       })}
     </div>
-    {activeTool === 'jev' && <JevContext key={currentConversation?.id} threadId={currentConversation?.id} state={jevState} selectedId={selectedJev} onLoad={onLoadJev} />}
+    {activeTool === 'jev' && <JevContext key={currentConversation?.id} threadId={currentConversation?.id} state={jevState} onLoad={onLoadJev} />}
     {activeTool === 'outputs' && <OutputsContext events={events} />}
     {activeTool === 'browser' && <BrowserContext key={currentConversation?.id} threadId={demo ? undefined : currentConversation?.id} signal={browserSignal} />}
     {activeTool === 'terminal' && <TerminalContext key={currentConversation?.id ?? 'none'} conversationId={currentConversation?.id} demo={demo} />}

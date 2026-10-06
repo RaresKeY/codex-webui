@@ -128,8 +128,11 @@ def main():
                 click('[aria-label="Open context panel"]')
                 evaluate("(() => { [...document.querySelectorAll('.context-tool-tabs button')].find(b => b.textContent === 'Jev').click(); return true })()")
                 wait("document.querySelectorAll('.jev-record').length === 3")
-                click('.jev-record > summary')
+                assert evaluate("[...document.querySelectorAll('.jev-record')].map(r => Number(r.dataset.activityId)).join(',') === '3,4,5' && !document.querySelector('.jev-record[open]')")
+                assert evaluate("getComputedStyle(document.querySelector('.jev-disclosure-chevron')).transform === 'none'")
+                click('.jev-record[data-activity-id="5"] > summary')
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 3 && document.querySelector('.jev-record[open]') !== null")
+                assert evaluate("getComputedStyle(document.querySelector('.jev-record[open] .jev-disclosure-chevron')).transform === 'matrix(0, 1, -1, 0, 0, 0)'")
                 assert evaluate("document.querySelectorAll('.jev-record[open] progress').length === 7")
                 assert evaluate("document.querySelector('.jev-preparation').textContent.includes('Up-to-date information') && document.querySelector('.jev-preparation').textContent.includes('Useful')")
                 assert evaluate("document.querySelector('.jev-record[open]').textContent.includes('1,200')")
@@ -157,6 +160,7 @@ def main():
                     wait("document.querySelector('.jev-context') !== null")
                 click('.jev-more')
                 wait("document.querySelectorAll('.jev-record').length === 4 && !document.querySelector('.jev-more')")
+                assert evaluate("[...document.querySelectorAll('.jev-record')].map(r => Number(r.dataset.activityId)).join(',') === '2,3,4,5' && !document.querySelector('.jev-record[open]')")
                 reads = JevFixtures.activity_reads
                 time.sleep(6)
                 assert JevFixtures.activity_reads == reads, 'Jev history must not poll'
@@ -166,10 +170,16 @@ def main():
                 wait("document.querySelectorAll('.jev-status.stopped').length === 2")
                 assert evaluate("document.querySelectorAll('.jev-record').length === 4")
                 assert JevFixtures.activity_reads == reads, 'Stage events must not refetch history'
+                click('.jev-record[data-activity-id="5"] > summary')
+                latest = {**changed, 'id':6, 'status':'pending', 'stage':'routing', 'turn_id':None}
+                JevFixtures.emit({'method':'webui/jevActivity','params':{'threadId':'c1','activity':latest}})
+                wait("document.querySelectorAll('.jev-record').length === 5")
+                assert evaluate("[...document.querySelectorAll('.jev-record')].map(r => Number(r.dataset.activityId)).join(',') === '2,3,4,5,6' && [...document.querySelectorAll('.jev-record')].find(r => r.dataset.activityId === '5').open && ![...document.querySelectorAll('.jev-record')].find(r => r.dataset.activityId === '6').open")
+                click('.jev-record[data-activity-id="5"] > summary')
                 other = {**changed, 'id':99, 'thread_id':'chat-1', 'decision':{'model':'gpt-6-luna','effort':'low'}}
                 JevFixtures.emit({'method':'webui/jevActivity','params':{'threadId':'chat-1','activity':other}})
                 time.sleep(.2)
-                assert evaluate("document.querySelectorAll('.jev-record').length === 4"), 'Another chat leaked into this sidebar'
+                assert evaluate("document.querySelectorAll('.jev-record').length === 5"), 'Another chat leaked into this sidebar'
                 for width,height in [(390,844),(320,640)]:
                     viewport(width,height)
                     wait("!document.querySelector('.context-panel')")
@@ -203,7 +213,7 @@ def main():
                 assert JevFixtures.calls == [], JevFixtures.calls
                 result = {'syntheticFixtures':True,'viewports':['1440x1000','390x844','320x640'],'checks':['turn-linked sidebar','process stages','probabilities and usage','native status','pagination','no five-second polling','event updates preserve older runs','chat isolation','phone fit','read failure and reload'],'uncaughtJavaScriptErrors':len(errors),'modelCalls':0}
                 (output/'checks.json').write_text(json.dumps(result,indent=2)+'\n')
-                print('Jev checks passed: turn-linked sidebar, event updates without polling, chat isolation, desktop/phone; no model calls.')
+                print('Jev checks passed: chronological collapsed sidebar and right/down disclosures, event updates without polling, chat isolation, desktop/phone; no model calls.')
 
             finally:
                 server.stopping = True
