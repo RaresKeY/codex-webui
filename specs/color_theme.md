@@ -15,6 +15,10 @@
 
 Verification: `tools/check_browser.py --theme-only` renders generic Markdown in the production bundle at 1440×1000, 390×844 and 320×640. It measures neutral headers/borders, shared sidebar/header fill, text contrast, contained table scrolling, disabled send and keyboard copy focus, with no prompt submission. A supplied `--baseline-bundle` captures matched prior styling without running the historical feature baseline. Evidence is under `evidence/ui/color-tokens/`.
 
+## Integrated pane presentation
+
+Context pane chrome now uses the canvas and existing neutral divider/selection tokens. It has square outer edges, no floating shadow, compact title typography and neutral tool tabs. Jev records use simple separators instead of nested rounded cards; browser chrome follows the same neutral surfaces.
+
 ## Gaps
 
 - Individual legacy context/tool/status treatments and illustration colors remain with their owners; this pass consolidates recurring shared colors and neutral Markdown chrome.

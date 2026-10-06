@@ -2,7 +2,7 @@
 .jev-page .page-header { align-items: center; }
 .jev-hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .jev-list { margin: 22px 0; display: grid; gap: 10px; }
-.jev-record { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.jev-record { border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; background: transparent; }
 .jev-record > summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; cursor: pointer; padding: 16px 20px; list-style: none; }
 .jev-record > summary::after { content: '⌄'; color: var(--muted); }
 .jev-record[open] > summary::after { content: '⌃'; }

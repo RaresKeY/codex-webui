@@ -65,6 +65,10 @@ The experimental branch is based on the preserved local WebUI theme, launch, ali
 
 The resulting local-work image passed its packaged backend suite and native offline lifecycle check, then a separate candidate runtime verified Codex health, thread-scoped Jev reads, and a real host-browser action through the Unix socket. After replacement, certificate-validated private HTTPS served the exact built asset hashes, browser agent availability, and healthy Codex/database status. Same-origin activity WebSockets worked and foreign origins were rejected. The data volume and original rollback image were retained; no model inference, Git push or external upstream update was performed during the correction.
 
+## Flush context pane polish
+
+Matched synthetic captures compare the deployed local-work bundle with the new pane at 1440×1000, 390×844 and 320×640. `tools/check_jev_browser.py` asserts exact edge attachment, zero outer margins/radii/shadows, alignment with the conversation edge, the closed 40px header control, Escape closing and restored focus. Jev process, pagination, event updates and chat isolation retain their checks. Pane chrome and Jev rows consume existing neutral theme tokens. The same browser regression covers automatic selection/opening, scaled cursor movement and reduced-motion behavior. No data/protocol migration or paid inference is involved.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

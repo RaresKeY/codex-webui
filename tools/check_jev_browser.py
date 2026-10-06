@@ -119,6 +119,10 @@ def main():
                 click('.chat-title')
                 wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && document.querySelector('.jev-turn-step') !== null")
                 assert not evaluate("Boolean(document.querySelector('.context-panel'))")
+                if not args.baseline_bundle:
+                    opener = evaluate("(() => {const b=document.querySelector('.context-panel-toggle'),r=b.getBoundingClientRect();return {width:r.width,height:r.height,expanded:b.getAttribute('aria-expanded'),right:r.right};})()")
+                    assert opener['width'] >= 40 and opener['height'] >= 40 and opener['expanded'] == 'false' and opener['right'] <= 1440, opener
+                    screenshot('closed.png')
                 click('.jev-turn-step')
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 3 && document.querySelector('.jev-record[open]') !== null")
                 assert evaluate("document.querySelectorAll('.jev-record[open] progress').length === 7")
@@ -127,7 +131,17 @@ def main():
                 assert evaluate("document.querySelectorAll('.jev-record[open] .jev-process-flow li[data-state=complete]').length === 3")
                 click('.jev-record[open] footer button')
                 wait("document.querySelector('.jev-turn-status')?.textContent.includes('Completed')")
+                if not args.baseline_bundle:
+                    geometry = evaluate("(() => {const p=document.querySelector('.context-panel'),r=p.getBoundingClientRect(),m=document.querySelector('.content-area').getBoundingClientRect(),c=getComputedStyle(p);return {top:r.top,bottom:r.bottom,right:r.right,left:r.left,mainRight:m.right,radius:c.borderRadius,shadow:c.boxShadow,margin:c.margin};})()")
+                    assert geometry['top'] == 0 and geometry['bottom'] == 1000 and geometry['right'] == 1440 and geometry['left'] == geometry['mainRight'], geometry
+                    assert geometry['radius'] == '0px' and geometry['shadow'] == 'none' and geometry['margin'] == '0px', geometry
                 screenshot('desktop.png')
+                if not args.baseline_bundle:
+                    evaluate("(() => {document.querySelector('[aria-label=\"Close context panel\"]').focus();return true;})()")
+                    key('\ue00c')
+                    wait("!document.querySelector('.context-panel') && document.activeElement.getAttribute('aria-label') === 'Open context panel'")
+                    click('[aria-label="Open context panel"]')
+                    wait("document.querySelector('.jev-context') !== null")
                 click('.jev-more')
                 wait("document.querySelectorAll('.jev-record').length === 4 && !document.querySelector('.jev-more')")
                 reads = JevFixtures.activity_reads
@@ -151,6 +165,8 @@ def main():
                     assert not evaluate("Boolean(document.querySelector('.chat-sidebar'))")
                     assert not evaluate("document.documentElement.scrollWidth > innerWidth")
                     assert evaluate("(() => {const r=document.querySelector('.context-panel').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth})()")
+                    if not args.baseline_bundle:
+                        assert evaluate("(() => {const p=document.querySelector('.context-panel'),r=p.getBoundingClientRect(),c=getComputedStyle(p);return r.top===0 && r.bottom===innerHeight && r.right===innerWidth && c.borderRadius==='0px' && c.boxShadow==='none';})()"), 'Phone pane must sit flush against screen edges'
                     screenshot(f'phone-{width}.png')
                     click('[aria-label="Close context panel"]')
                 viewport(1440,1000)

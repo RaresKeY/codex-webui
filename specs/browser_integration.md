@@ -41,6 +41,10 @@ The original implementation pass passed 58 backend tests and 43 frontend tests. 
 - A redacted live CLI 0.160.1 ephemeral-thread smoke verified registration and a real agent turn invoking open/click against the synthetic fixture, with unchanged Codex config digest.
 - Production UI checked at 1920×1080 and 760×900: initial collapse, automatic Browser selection/opening, separate panel geometry, narrow fit, resize collapse, drawer exclusivity, reachable close control, measured cursor intermediate positions and reduced-motion media behavior.
 
+## Integrated pane presentation
+
+The visible Browser sits in the flush context region with square outer edges, a neutral conversation divider and compact aligned pane controls. At narrow widths it attaches directly to the screen edges; automatic opening, frame cadence and cursor motion retain their existing behavior.
+
 ## Gaps
 
 - The page is a periodically refreshed screenshot, with view-only pixels; full interactive browser input, multiple tabs, uploads, downloads, popup/frame workflows and mobile page emulation are absent.

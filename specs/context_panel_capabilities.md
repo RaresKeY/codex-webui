@@ -56,6 +56,10 @@ Sources for the cloud distinction: [Projects in ChatGPT](https://help.openai.com
 
 On the experimental branch, Browser is an implemented bounded live screenshot context with navigation controls. Agent browser actions select and open it automatically, with smooth observed-target cursor movement and reduced-motion support. Availability is runtime checked. See [browser_integration.md](browser_integration.md).
 
+## Integrated pane presentation
+
+The open panel is a flush rectangular app region: no outer gap, radius or floating shadow, with a single neutral divider from the conversation. Its compact header aligns with the chat header; neutral tool tabs share the existing palette. The closed state has a 40px top-right pane control. Opening moves that control into the pane header; Escape or closing restores focus to the conversation control. Narrow layouts use an edge-attached full-height pane rather than an inset rounded card.
+
 ## Gaps
 
 - No public standalone Browser control is available.

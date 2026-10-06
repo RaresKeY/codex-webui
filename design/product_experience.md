@@ -10,6 +10,10 @@ Every text ask uses automatic Jev model/effort selection enforced by the backend
 
 The experimental Browser panel follows the reference split conversation/browser experience: visible address chrome, automatic opening on agent actions, smooth cursor movement, and the existing narrow-width drawer. See [../specs/browser_integration.md](../specs/browser_integration.md) for current bounds.
 
+## Integrated pane presentation
+
+The context sidebar should read as part of the app: a square, edge-attached split next to the conversation, with a compact aligned header and neutral tool selection. Its closed top-right control remains quiet and reachable; narrow screens attach the pane to the viewport edges.
+
 ## Gaps
 
 - Decide user-controlled model overrides only if requested; the current requested flow is automatically routed.
