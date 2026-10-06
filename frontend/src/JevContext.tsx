@@ -8,9 +8,14 @@ function percentage(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? `${(value * 100).toFixed(1)}%` : 'Unavailable'
 }
 
-function Probabilities({ title, values }: { title: string; values?: Record<string, number> }) {
+function Probabilities({ title, values, effort = false }: { title: string; values?: Record<string, number>; effort?: boolean }) {
   if (!values) return null
-  return <section className="jev-probabilities"><h4>{title}</h4>{Object.entries(values).map(([label, value]) => <div key={label}><span>{label.replace('gpt-', '')}</span><progress max="1" value={value} aria-label={`${label} probability`} /><strong>{percentage(value)}</strong></div>)}</section>
+  const entries = Object.entries(values)
+  if (effort) {
+    const rank: Record<string, number> = { max: 0, xhigh: 1, high: 2, medium: 3, low: 4 }
+    entries.sort(([a], [b]) => (rank[a] ?? 5) - (rank[b] ?? 5))
+  }
+  return <section className="jev-probabilities"><h4>{title}</h4>{entries.map(([label, value]) => <div key={label}><span>{label.replace('gpt-', '')}</span><progress max="1" value={value} aria-label={`${label} probability`} /><strong>{percentage(value)}</strong></div>)}</section>
 }
 
 function ActivityRecord({ item }: { item: JevActivity }) {
@@ -41,7 +46,7 @@ function ActivityRecord({ item }: { item: JevActivity }) {
         const answer = decision?.preparation?.[field]
         return <div key={field}><dt>{label}</dt><dd>{answer ? { yes: 'Useful', no: 'Not needed', unclear: 'Unclear' }[answer.choice] : 'Unavailable'}{answer && ` · ${percentage(answer.confidence)} confidence`}</dd></div>
       })}</dl><p className="jev-hint">These answers are advisory. Search and project summaries are not prepared automatically yet.</p></section>}
-      <div className="jev-distributions"><Probabilities title="Model probabilities" values={decision?.modelProbabilities} /><Probabilities title="Effort probabilities" values={decision?.effortProbabilities} /></div>
+      <div className="jev-distributions"><Probabilities title="Model probabilities" values={decision?.modelProbabilities} /><Probabilities title="Effort probabilities" values={decision?.effortProbabilities} effort /></div>
       {item.source !== 'manual' && decision && <p className="jev-hint">Confidence and probabilities are classifier estimates, not measured success rates.</p>}
       {turn && <p className="jev-turn-status" role="status">Actual turn: {{ inProgress: 'Running', completed: 'Completed', interrupted: 'Interrupted', failed: 'Failed', unknown: 'Status unavailable' }[turn.status]}</p>}
       {error && <p role="alert">{error}</p>}

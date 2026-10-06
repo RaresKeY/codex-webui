@@ -134,6 +134,8 @@ def main():
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 3 && document.querySelector('.jev-record[open]') !== null")
                 assert evaluate("getComputedStyle(document.querySelector('.jev-record[open] .jev-disclosure-chevron')).transform === 'matrix(0, 1, -1, 0, 0, 0)'")
                 assert evaluate("document.querySelectorAll('.jev-record[open] progress').length === 7")
+                assert evaluate("[...document.querySelectorAll('.jev-record[open] .jev-probabilities')].find(s => s.querySelector('h4').textContent === 'Effort probabilities').querySelectorAll('div > span').length === 5")
+                assert evaluate("[...[...document.querySelectorAll('.jev-record[open] .jev-probabilities')].find(s => s.querySelector('h4').textContent === 'Effort probabilities').querySelectorAll('div > span')].map(s => s.textContent).join(',') === 'max,xhigh,high,medium,low'")
                 assert evaluate("document.querySelector('.jev-preparation').textContent.includes('Up-to-date information') && document.querySelector('.jev-preparation').textContent.includes('Useful')")
                 assert evaluate("document.querySelector('.jev-record[open]').textContent.includes('1,200')")
                 assert evaluate("document.querySelectorAll('.jev-record[open] .jev-process-flow li[data-state=complete]').length === 3")
