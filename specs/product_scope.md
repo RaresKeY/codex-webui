@@ -10,6 +10,10 @@ Text chat uses Auto Jev selection or an explicitly saved per-chat manual choice,
 
 The sidebar follows the ChatGPT app hierarchy with compact New chat/Search chats/navigation rows, an expandable project list, quiet single-line chats and a fixed profile row. See `sidebar_navigation.md` for behavior, responsive focus contracts and evidence limits.
 
+## Experimental browser
+
+The experimental Browser context provides a visible agent-controlled page, automatic panel opening and smooth pointer feedback. It is one thread-owned session with view-only page pixels; see [browser_integration.md](browser_integration.md).
+
 ## Gaps
 
 - No paid integration or real microphone evidence in this project.

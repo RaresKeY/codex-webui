@@ -16,6 +16,10 @@ Source hosting uses the project’s public origin. Authentication and any additi
 
 Both image builds explicitly mark final images `io.rareskey.retention=retain`, intermediate build images `ephemeral`, and project ownership `codex-webui-2`. The build flow holds a shared workstation build-retention flock so periodic cleanup cannot race these builds.
 
+## Experimental browser
+
+For the experimental browser, install the rendered `tools/browser-bridge.service.in` as a user service, with `@PROJECT_ROOT@` replaced by the owning checkout path. Start it before `tools/run-container.sh --detach --tailscale --browser`. The bridge uses the installed user Flatpak and project Python environment; its private Unix socket is mounted read-only into the container. `CODEX_WEBUI_CONTAINER_NAME`, `CODEX_WEBUI_PORT` and `CODEX_WEBUI_DATA_VOLUME` allow an isolated candidate runtime. The default preserves the existing data volume and loopback port. Roll back by stopping the candidate and relaunching the retained previous image against the same data volume; omit `--browser` when the image predates the bridge. See [browser_integration.md](browser_integration.md).
+
 ## Gaps
 
 - amd64 image/runtime is the current target; no ARM64 image/runtime evidence yet.

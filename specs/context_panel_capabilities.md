@@ -51,6 +51,10 @@ Sources for the cloud distinction: [Projects in ChatGPT](https://help.openai.com
 - Live on 2026-08-15, the installed App Server returned the documented active-writer conflict for a Desktop-owned thread; the companion converted it to HTTP 200 with an actionable `unavailableReason`. The Changes adapter returned the checkout's real bounded status.
 - Desktop and 760-pixel browser checks exercise all selectors, panel collapse, and overlay behavior. Browser remains visibly planned; supported tools render backing-driven empty, limited, or populated states.
 
+## Experimental browser
+
+On the experimental branch, Browser is an implemented bounded live screenshot context with navigation controls. Agent browser actions select and open it automatically, with smooth observed-target cursor movement and reduced-motion support. Availability is runtime checked. See [browser_integration.md](browser_integration.md).
+
 ## Gaps
 
 - No public standalone Browser control is available.

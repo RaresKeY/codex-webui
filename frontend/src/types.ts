@@ -166,6 +166,7 @@ export interface BootstrapPayload {
 }
 
 export interface LiveUpdate {
+  browser?: import('./BrowserContext').BrowserSignal
   lifecycle?: 'archived' | 'deleted' | 'restored'
   selectedModel?: string
   selectedEffort?: string

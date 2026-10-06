@@ -5,6 +5,7 @@
 | Document | External ownership |
 | --- | --- |
 | [codex_cli_app_server.md](codex_cli_app_server.md) | Codex CLI/App Server compatibility |
+| [jev_browser.md](jev_browser.md) | Local Jev port and Chromium Flatpak/CDP boundary |
 | [runtime_dependencies.md](runtime_dependencies.md) | Runtime/build dependency policy |
 | [platform_interfaces.md](platform_interfaces.md) | Docker, GHCR, Linux/Pi, Tailscale and Drive |
 

@@ -397,6 +397,7 @@ export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string):
   if (method === 'thread/deleted') return { lifecycle: 'deleted' }
   if (method === 'thread/unarchived') return { lifecycle: 'restored' }
   if (method === 'webui/modelSelected') return { selectedModel: text(params.model), ...(optionalText(params.effort) ? { selectedEffort: text(params.effort) } : {}) }
+  if (method === 'webui/browser' && threadId) return { browser: params as unknown as import('./BrowserContext').BrowserSignal }
   if (method === 'thread/name/updated') return { conversationTitle: text(params.threadName).trim() || UNTITLED_CONVERSATION }
   if (method === 'turn/started' && turnId) return { turn: { kind: 'started', turnId } }
   if (method === 'turn/completed' && turnId) {

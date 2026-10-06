@@ -53,6 +53,10 @@ October 6 reference sidebar: 70 frontend tests plus container build/lint/type ch
 
 Gallery/sidebar pass: 75 frontend tests, 142 backend tests, native offline lifecycle and Firefox sidebar/gallery/chat checks at desktop and phone widths. Matched captures and source navigation evidence live in `evidence/ui/gallery-sidebar/`; no paid inference.
 
+## Experimental browser
+
+The experimental browser adds adapter/schema, stale-observation, event-scoping and bridge cancellation tests. `tools/smoke_browser.py --run` verifies real audited Flatpak interaction against an isolated synthetic fixture without paid inference. Desktop/narrow-width production checks use synthetic fixtures. Prior browser implementation evidence is recorded in [browser_integration.md](browser_integration.md); paid model execution is not required for a rebase/deployment check.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

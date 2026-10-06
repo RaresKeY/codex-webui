@@ -1,0 +1,16 @@
+[Unit]
+Description=Codex WebUI restricted browser bridge
+
+[Service]
+Type=simple
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=@PROJECT_ROOT@/tools/run-browser-bridge.sh
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=codex-webui-browser
+RuntimeDirectoryMode=0700
+UMask=0077
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

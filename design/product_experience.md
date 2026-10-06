@@ -6,6 +6,10 @@ Keep conversation previews, project names and timestamps behind hover summaries 
 
 Every text ask uses automatic Jev model/effort selection enforced by the backend. Show choosing, switching and sending state; show selected model provenance; keep the exact draft on errors and preserve whitespace when sending. Expose workspace tools from a collapsed context panel. Projects, scheduled tasks, images and settings belong in the single sidebar. On phones navigation and context are exclusive drawers.
 
+## Experimental browser
+
+The experimental Browser panel follows the reference split conversation/browser experience: visible address chrome, automatic opening on agent actions, smooth cursor movement, and the existing narrow-width drawer. See [../specs/browser_integration.md](../specs/browser_integration.md) for current bounds.
+
 ## Gaps
 
 - Decide user-controlled model overrides only if requested; the current requested flow is automatically routed.

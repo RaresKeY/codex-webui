@@ -6,6 +6,8 @@ Current direct dependency families include FastAPI/Uvicorn/Pydantic Settings/aio
 
 For each distributed component record its name, resolved version, upstream URL, license identifier, copyright/notice obligations, and the location of any required bundled license text. Codex CLI/OpenAI services and optional Tailscale software remain governed by their applicable terms and licenses.
 
+The experimental browser uses the separately installed Chromium Flatpak (Chromium BSD-3-Clause, Flatpak LGPL-2.1-or-later) without bundling either. The local Jev browser source port and its version/ownership are recorded in `vendored/jev_browser.md`.
+
 ## Gaps
 
 - Hash-locked Python resolution and immutable release-image data are needed for a complete notice inventory.

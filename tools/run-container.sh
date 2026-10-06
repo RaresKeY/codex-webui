@@ -14,11 +14,13 @@ fi
 CODEX_STATE=$(realpath -- "$CODEX_STATE")
 DETACH=false
 TAILSCALE=false
+BROWSER=false
 for option in "$@"; do
   case "$option" in
     --detach) DETACH=true ;;
     --tailscale) TAILSCALE=true ;;
-    *) printf '%s\n' 'Usage: tools/run-container.sh [--detach] [--tailscale]' >&2; exit 1 ;;
+    --browser) BROWSER=true ;;
+    *) printf '%s\n' 'Usage: tools/run-container.sh [--detach] [--tailscale] [--browser]' >&2; exit 1 ;;
   esac
 done
 ALLOWED_HOSTS=127.0.0.1,localhost
@@ -35,16 +37,22 @@ print(host)
   ALLOWED_HOSTS="$ALLOWED_HOSTS,$TAILSCALE_HOST"
   ALLOWED_ORIGINS="$ALLOWED_ORIGINS,https://$TAILSCALE_HOST"
 fi
-set -- --rm --name codex-webui-2 --label app=codex-webui-2 \
+set -- --rm --name "${CODEX_WEBUI_CONTAINER_NAME:-codex-webui-2}" --label app=codex-webui-2 \
   --userns=keep-id --user "$(id -u):$(id -g)" --cap-drop=ALL --security-opt=no-new-privileges \
   --publish "127.0.0.1:$PORT:8000" \
   --volume "$WORKSPACE_ROOT:$WORKSPACE_ROOT:rw" --volume "$CODEX_STATE:/codex:rw" \
-  --volume codex-webui-2-data:/data \
+  --volume "${CODEX_WEBUI_DATA_VOLUME:-codex-webui-2-data}:/data" \
   --env "CODEX_WEBUI_WORKSPACE_ROOT=$WORKSPACE_ROOT" \
   --env "CODEX_WEBUI_CODEX_STATE_SOURCE_DIR=$CODEX_STATE" \
   --env "CODEX_WEBUI_ALLOWED_HOSTS=$ALLOWED_HOSTS" \
   --env "CODEX_WEBUI_ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
   --env "CODEX_WEBUI_REALTIME_FEATURE_ENABLED=${CODEX_WEBUI_REALTIME_FEATURE_ENABLED:-true}"
+if [ "$BROWSER" = true ]; then
+  BRIDGE_DIRECTORY=${CODEX_WEBUI_BROWSER_BRIDGE_DIR:-"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/codex-webui-browser"}
+  [ -S "$BRIDGE_DIRECTORY/bridge.sock" ] || { printf '%s\n' 'Start the restricted host browser bridge first.' >&2; exit 1; }
+  set -- "$@" --volume "$BRIDGE_DIRECTORY:/run/browser-bridge:ro" \
+    --env CODEX_WEBUI_BROWSER_BRIDGE_SOCKET=/run/browser-bridge/bridge.sock
+fi
 if [ -f "$JEV_KEY_FILE" ]; then
   JEV_KEY_FILE=$(realpath -- "$JEV_KEY_FILE")
   set -- "$@" --volume "$JEV_KEY_FILE:/run/secrets/jev.env:ro" \

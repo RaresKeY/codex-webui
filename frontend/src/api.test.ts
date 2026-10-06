@@ -172,3 +172,13 @@ describe('native chat lifecycle notifications', () => {
   expect(notificationUpdate({ method: 'thread/unarchived', params: { threadId: 'a' } })).toEqual({ lifecycle: 'restored' })
  })
 })
+
+describe('experimental browser notifications', () => {
+  it('preserves thread identity and pointer coordinates without creating transcript text', () => {
+    const signal = { threadId: 'browser-thread', action: 'pointer', open: true, cursor: { x: 320, y: 180, click: false }, width: 1280, height: 900, revision: 4 }
+    const update = notificationUpdate({ method: 'webui/browser', params: signal })
+    expect(update?.browser).toEqual(signal)
+    expect(update?.event).toBeUndefined()
+    expect(notificationUpdate({ method: 'webui/browser', params: { action: 'open' } })).toBeNull()
+  })
+})

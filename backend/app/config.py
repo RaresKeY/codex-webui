@@ -84,6 +84,8 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("CODEX_WEBUI_CODEX_COMMAND", "CODEX_BIN"),
     )
     codex_enabled: bool = True
+    browser_enabled: bool = True
+    browser_bridge_socket: Path | None = None
     codex_request_timeout_seconds: float = Field(default=30, gt=0, le=120)
     jev_key_file: Path | None = None
     # Original host path, when the runtime mounts the same key at /run/secrets.

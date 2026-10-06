@@ -58,3 +58,5 @@ Project memory: [specs](specs/_readme.md), [desired design](design/_readme.md), 
 New chat opens a launch page: submit independent prompts without leaving it, then open any of the last ten chats. Spinners show active work and blue dots mark finished unread replies. See [launch behavior](specs/new_chat_launch.md).
 
 Projects now open a scoped quick composer and recent chats. New chat supports No project; creation offers optional workspace details and folder colors. Bottom controls show the recorded last-turn model/effort. See [project launch](specs/project_launch.md).
+
+Experimental browser: start the restricted host companion with `tools/run-browser-bridge.sh`, then use `tools/run-container.sh --detach --tailscale --browser`. For background service setup and limitations, see [browser integration](specs/browser_integration.md). Browser tools attach to newly created chats on verified CLI 0.160.1.

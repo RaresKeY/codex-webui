@@ -14,6 +14,7 @@
 | [chat_permissions.md](chat_permissions.md) | Per-chat native permission presets | Composer permissions, auto review, YOLO, new-chat inheritance, acknowledgement and persistence |
 | [sidebar_navigation.md](sidebar_navigation.md) | ChatGPT-style navigation | Sidebar hierarchy, project filtering, search, keyboard/touch and drawer focus |
 | [product_scope.md](product_scope.md) | WebUI 2 | User roles, milestone surface, projects and chats |
+| [browser_integration.md](browser_integration.md) | Experimental Linux + container bridge | Audited Jev browser, dynamic tools, live sidebar and cursor |
 | [architecture.md](architecture.md) | Python companion + container | Components, boundaries, flow and source ownership |
 | [codex_app_server.md](codex_app_server.md) | Protocol subset + Jev ordering | Host Codex adapter, resumable sessions, approvals, and realtime |
 | [persistence_model.md](persistence_model.md) | Organization + turn selections | Records, identifiers, per-turn model/effort, migrations and retention |

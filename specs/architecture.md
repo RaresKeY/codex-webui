@@ -8,6 +8,10 @@ FastAPI/Python owns SQLite organization, bounded workspace access, the App Serve
 
 Bootstrap serves local shell data without native RPCs; history/models/usage hydrate independently, with images/workspace files deferred to their surfaces. `plugins.py` resolves explicit composer selections against native installed metadata before Jev and appends validated mentions after the exact ask. Native requests and browser reads have deadlines and do not retry execution. See `chat_interactions.md` for the presentation and failure contracts.
 
+## Experimental browser
+
+The experimental Browser context connects through `browser_service.py`; a container may use the typed Unix-socket client in `browser_bridge.py` to a separately owned host Flatpak companion. UI/persistence retain the existing narrow Codex adapter. See [browser_integration.md](browser_integration.md).
+
 ## Gaps
 
 - Reconnect still hydrates authoritative history rather than replaying missed events.

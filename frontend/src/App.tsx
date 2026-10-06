@@ -21,6 +21,7 @@ import { recoverChatActivity, reconcileChat, reduceChatActivity, type ChatActivi
 import { ConversationListItem } from './ConversationListItem'
 import { CONTEXT_TOOLS, DEFAULT_CONTEXT_TOOL, contextualConversations, type ContextToolId } from './context-tools'
 import { groupEventFeed } from './event-groups'
+import { BrowserContext, type BrowserSignal } from './BrowserContext'
 import { MarkdownContent } from './MarkdownContent'
 import type { ChatExecution } from './api'
 import { Composer } from './Composer'
@@ -417,17 +418,6 @@ function OutputsContext({ events }: { events: StreamEvent[] }) {
   </section>
 }
 
-function PlannedContext({ toolId }: { toolId: ContextToolId }) {
-  const tool = CONTEXT_TOOLS.find(item => item.id === toolId) ?? CONTEXT_TOOLS[0]
-  const Icon = contextToolIcons[tool.id]
-  return <section className="context-placeholder" id={`context-tool-${tool.id}`} role="tabpanel" aria-label={tool.label}>
-    <span className="context-placeholder-icon"><Icon size={24} /></span>
-    <span className="eyebrow">Planned surface</span>
-    <h3>{tool.label}</h3>
-    <p>{tool.description}</p>
-    <small>{tool.backing}. No private desktop interface is being assumed.</small>
-  </section>
-}
 
 function formatTerminalMemory(rssKb?: number) {
   if (rssKb === undefined) return 'Memory unavailable'
@@ -488,7 +478,7 @@ function SideChatsContext({ conversations, current, onSelect }: { conversations:
   </section>
 }
 
-function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose }: { files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
+function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal }: { browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
   const [tree, setTree] = useState(files)
   const [treeError, setTreeError] = useState('')
   const [selected, setSelected] = useState<WorkspaceFile | null>(null)
@@ -550,11 +540,11 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
     <div className="context-tool-tabs" role="tablist" aria-label="Context tools">
       {CONTEXT_TOOLS.map(tool => {
         const Icon = contextToolIcons[tool.id]
-        return <button key={tool.id} role="tab" aria-selected={activeTool === tool.id} aria-controls={`context-tool-${tool.id}`} className={activeTool === tool.id ? 'active' : ''} onClick={() => onToolChange(tool.id)} title={`${tool.label} · ${tool.availability === 'planned' ? 'planned' : tool.backing}`}><Icon size={15} /><span>{tool.label}</span>{tool.id === 'changes' && <i>{reportedChanges.length}</i>}{tool.availability === 'planned' && <b aria-label="Planned" />}</button>
+        return <button key={tool.id} role="tab" aria-selected={activeTool === tool.id} aria-controls={`context-tool-${tool.id}`} className={activeTool === tool.id ? 'active' : ''} onClick={() => onToolChange(tool.id)} title={`${tool.label} · ${tool.backing}`}><Icon size={15} /><span>{tool.label}</span>{tool.id === 'changes' && <i>{reportedChanges.length}</i>}</button>
       })}
     </div>
     {activeTool === 'outputs' && <OutputsContext events={events} />}
-    {activeTool === 'browser' && <PlannedContext toolId={activeTool} />}
+    {activeTool === 'browser' && <BrowserContext key={currentConversation?.id} threadId={demo ? undefined : currentConversation?.id} signal={browserSignal} />}
     {activeTool === 'terminal' && <TerminalContext key={currentConversation?.id ?? 'none'} conversationId={currentConversation?.id} demo={demo} />}
     {activeTool === 'side-chats' && <SideChatsContext conversations={conversations} current={currentConversation} onSelect={onSelectConversation} />}
     {workspaceActive && <section className="workspace-context" id={`context-tool-${activeTool}`} role="tabpanel" aria-label={activeDefinition.label}>
@@ -763,6 +753,7 @@ export default function App() {
   const [projectCreationRequest, setProjectCreationRequest] = useState(0)
   const [launchProjectId, setLaunchProjectId] = useState('')
   const [rightOpen, setRightOpen] = useState(false)
+  const [browserSignal, setBrowserSignal] = useState<BrowserSignal | null>(null)
   const [activeContextTool, setActiveContextTool] = useState<ContextToolId>(DEFAULT_CONTEXT_TOOL)
 
   useEffect(() => {
@@ -893,6 +884,14 @@ export default function App() {
       conversations: current.conversations.map(conversation => conversation.id === activeId ? { ...conversation, status } : conversation),
     } : current)
     const applyUpdate = (update: LiveUpdate) => {
+      if (update.browser) {
+        setBrowserSignal(update.browser)
+        if (update.browser.open && !['updated', 'pointer'].includes(update.browser.action)) {
+          setActiveContextTool('browser')
+          setRightOpen(true)
+          if (isNarrowLayout()) setLeftOpen(false)
+        }
+      }
       if (update.selectedModel) {
         selectionPending = true
         activeModelRef.current = update.selectedModel
@@ -1056,7 +1055,7 @@ export default function App() {
     finally { deleteBusy.current = false; setDeleting(false) }
   }
   const newChat = () => showView('new')
-  return <div className={`app-shell ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
+  return <div className={`app-shell ${rightOpen && activeContextTool === 'browser' ? 'browser-open' : ''} ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
     {!leftOpen && view !== 'chat' && view !== 'new' && view !== 'jev' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
     {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={closeLeft} />
@@ -1075,7 +1074,7 @@ export default function App() {
         selectConversation(chat)
       }} />}
     </div>
-    {rightOpen && <ContextPanel files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={() => setRightOpen(false)} />}
+    {rightOpen && <ContextPanel browserSignal={browserSignal} files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={() => setRightOpen(false)} />}
     {deleteTarget && <Modal title={deleteTarget.chat ? 'Delete chat?' : 'Delete project?'} description={deleteTarget.chat ? `Permanently delete “${deleteTarget.chat.title}” and any chats it spawned. This cannot be undone.` : `Delete “${deleteTarget.project?.name}”? Its chats will be kept under No project. Workspace files will stay on disk.`} onClose={() => { if (!deleteBusy.current) setDeleteTarget(null) }}><div className="modal-form delete-confirmation">{deleteError && <p className="modal-error" role="alert">{deleteError}</p>}<footer><button type="button" autoFocus className="button" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="button destructive-button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? 'Deleting…' : deleteTarget.chat ? 'Delete chat' : 'Delete project'}</button></footer></div></Modal>}
     <div className="mobile-scrim right" onClick={() => setRightOpen(false)} />
   </div>

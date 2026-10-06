@@ -22,6 +22,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import StreamingResponse
 
+from .browser_service import BROWSER_TOOL, BrowserAction, BrowserService
+from .browser_bridge import BrowserBridgeClient
 from .chat_service import MessageError, RoutedChat, UNSUPPORTED_HISTORY_MESSAGE, unsupported_history
 from .codex_client import CodexAppServerClient, CodexRPCError, CodexTimeout, CodexUnavailable
 from .config import Settings, load_settings
@@ -63,6 +65,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         experimental_api=settings.experimental_api,
         request_timeout=settings.codex_request_timeout_seconds,
     )
+    browser = (BrowserBridgeClient(settings.browser_bridge_socket, codex._publish)
+               if settings.browser_enabled and settings.browser_bridge_socket else
+               BrowserService(settings.browser_enabled and settings.runtime == "localhost-companion", codex._publish))
+    codex.browser_tool_handler = browser.tool_call
     protected_paths = tuple(path for path in (
         settings.jev_key_file, settings.jev_key_source_file, settings.codex_state_source_dir,
         Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex"),
@@ -84,15 +90,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.workspace_root.mkdir(parents=True, exist_ok=True)
         await db.initialize()
         await codex.start()  # Failure is intentionally non-fatal: the UI remains usable.
+        await browser.start()
+        browser.agent_available = browser.available and codex.available and codex.cli_version == "codex-cli 0.160.1"
         await scheduler.start()
-        yield
-        await scheduler.stop()
-        await codex.stop()
+        try:
+            yield
+        finally:
+            await scheduler.stop()
+            await codex.stop()
+            await browser.stop()
 
     app = FastAPI(title="Codex WebUI API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.db = db
     app.state.codex = codex
+    app.state.browser = browser
     app.state.workspace = workspace
     app.state.scheduler = scheduler
     app.state.updater = updater
@@ -149,6 +161,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def codex_timeout(_: Request, exc: CodexTimeout):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=504, content={"detail": "Codex took too long to respond. Check the current state before retrying."})
+
+    @app.get("/api/threads/{thread_id}/browser")
+    async def browser_state(thread_id: str):
+        from fastapi.responses import JSONResponse
+        try:
+            state = await browser.refresh(thread_id)
+        except Exception:
+            raise HTTPException(503, "Browser frame unavailable") from None
+        return JSONResponse(state, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/threads/{thread_id}/browser")
+    async def browser_action(thread_id: str, body: BrowserAction):
+        try:
+            await browser.action(thread_id, body)
+            return browser.state(thread_id)
+        except Exception:
+            raise HTTPException(409, "Browser action failed. Check the runtime, URL, or refresh the observation.") from None
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -379,6 +408,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             params["model"] = body.model
         if body.ephemeral:
             params["ephemeral"] = True
+        if browser.available and codex.cli_version == "codex-cli 0.160.1":
+            params["dynamicTools"] = [BROWSER_TOOL]
         result = await codex.request("thread/start", params)
         thread_id = result.get("thread", {}).get("id") if isinstance(result, dict) else None
         if not thread_id:

@@ -66,6 +66,10 @@ Installed 0.160.0 catalogs add `skills/list`, `app/installed`, `app/read` and `f
 
 `ThreadStartParams` also accepts `approvalsReviewer`, `approvalPolicy` and `sandbox`; `ThreadStartResponse` reports effective approval policy/reviewer/sandbox. New-chat permission inheritance uses those fields and a saved per-chat snapshot after successful creation. Manual model changes retain the same settings acknowledgement barrier.
 
+## Experimental browser
+
+New threads on verified CLI 0.160.1 may register the `browser` dynamic function. Its requests execute asynchronously, return bounded untrusted observations, and cancel on resolved/interrupted turns. Resume does not add tools. Routed chat model acknowledgement and exact input submission remain unchanged. See [browser_integration.md](browser_integration.md).
+
 ## Gaps
 
 - Native full history reads of ephemeral threads are unsupported in 0.160.0; metadata/settings checks still work. Ordinary UI chats use durable legacy threads.

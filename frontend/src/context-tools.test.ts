@@ -14,18 +14,17 @@ describe('context tool registry', () => {
     ])
   })
 
-  it('defaults to Explorer and leaves only the desktop-private Browser surface planned', () => {
+  it('defaults to Explorer with the experimental browser adapter', () => {
     expect(DEFAULT_CONTEXT_TOOL).toBe('explorer')
     expect(CONTEXT_TOOLS.filter(tool => tool.availability === 'available').map(tool => tool.id)).toEqual([
       'outputs',
+      'browser',
       'terminal',
       'side-chats',
       'explorer',
       'changes',
     ])
-    expect(CONTEXT_TOOLS.filter(tool => tool.availability === 'planned').map(tool => tool.id)).toEqual([
-      'browser',
-    ])
+    expect(CONTEXT_TOOLS.find(tool => tool.id === 'browser')?.backing).toBe('Experimental Jev browser adapter')
   })
 
   it('ranks related side chats without duplicating the open conversation', () => {

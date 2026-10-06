@@ -36,6 +36,7 @@ def settings(tmp_path: Path, workspace_root: Path) -> Settings:
         data_dir=tmp_path / "data",
         workspace_root=workspace_root,
         codex_enabled=False,
+        browser_enabled=False,
         allowed_origins=["http://testserver"],
         allowed_hosts=["testserver"],
     )

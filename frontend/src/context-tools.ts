@@ -2,7 +2,7 @@ import type { Conversation } from './types'
 
 export const CONTEXT_TOOLS = [
   { id: 'outputs', label: 'Outputs', availability: 'available', backing: 'App Server notifications', description: 'Recent command, file, status, and approval activity from this conversation.' },
-  { id: 'browser', label: 'Browser', availability: 'planned', backing: 'No public control method', description: 'The installed public App Server schema has no browser tab or navigation control surface. The Codex desktop in-app Browser is not exposed to this standalone client.' },
+  { id: 'browser', label: 'Browser', availability: 'available', backing: 'Experimental Jev browser adapter', description: 'Live restricted Chromium page with visible agent actions. Linux browser companion required; new chats receive the browser tool.' },
   { id: 'terminal', label: 'Terminal', availability: 'available', backing: 'thread/backgroundTerminals/list', description: 'Read-only monitoring for background terminals owned by this Codex thread. Starting arbitrary shell commands is intentionally not exposed.' },
   { id: 'side-chats', label: 'Side chats', availability: 'available', backing: 'thread/list', description: 'Open recent related Codex threads beside the primary conversation without creating a second transcript model.' },
   { id: 'explorer', label: 'Explorer', availability: 'available', backing: 'Bounded workspace adapter', description: 'Browse, preview, and edit text files inside the configured local workspace boundary.' },

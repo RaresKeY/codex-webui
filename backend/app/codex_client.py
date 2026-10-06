@@ -79,6 +79,9 @@ class CodexAppServerClient:
         self.last_error: str | None = None
         self.server_info: dict[str, Any] | None = None
         self.cli_version: str | None = None
+        self.browser_tool_handler = None
+        self._tool_tasks: set[asyncio.Task] = set()
+        self._browser_calls: dict[str, tuple[asyncio.Task, dict[str, Any]]] = {}
 
     @property
     def available(self) -> bool:
@@ -131,6 +134,10 @@ class CodexAppServerClient:
             return False
 
     async def stop(self) -> None:
+        for task in tuple(self._tool_tasks):
+            task.cancel()
+        if self._tool_tasks:
+            await asyncio.gather(*self._tool_tasks, return_exceptions=True)
         process, self.process = self.process, None
         if process and process.returncode is None:
             process.terminate()
@@ -282,6 +289,9 @@ class CodexAppServerClient:
                     None,
                 )
                 if resolved_id is not None:
+                    browser_call = self._browser_calls.pop(str(resolved_id), None)
+                    if browser_call:
+                        browser_call[0].cancel()
                     removed = self._server_requests.pop(str(resolved_id), None)
                     if removed is not None:
                         await self._publish(
@@ -290,6 +300,14 @@ class CodexAppServerClient:
                                 "params": {"id": resolved_id, "reason": "server-resolved"},
                             }
                         )
+
+        if method == "turn/completed":
+            params = message.get("params", {})
+            turn = params.get("turn", {}) if isinstance(params, dict) else {}
+            if isinstance(turn, dict) and turn.get("status") in {"interrupted", "failed"}:
+                for task, call in tuple(self._browser_calls.values()):
+                    if call.get("threadId") == params.get("threadId") and call.get("turnId") == turn.get("id"):
+                        task.cancel()
 
         request_id = message.get("id")
         if request_id is not None and "method" not in message:
@@ -319,6 +337,16 @@ class CodexAppServerClient:
                     }
                 )
                 return
+            params = message.get("params", {})
+            if method == "item/tool/call" and isinstance(params, dict) and params.get("tool") == "browser" and not params.get("namespace") and self.browser_tool_handler:
+                task = asyncio.create_task(self._handle_browser_tool(request_id, params))
+                self._tool_tasks.add(task)
+                self._browser_calls[str(request_id)] = (task, params)
+                def completed(finished):
+                    self._tool_tasks.discard(finished)
+                    self._browser_calls.pop(str(request_id), None)
+                task.add_done_callback(completed)
+                return
             item = ServerRequest(
                 id=request_id,
                 method=str(message["method"]),
@@ -331,6 +359,17 @@ class CodexAppServerClient:
 
     async def publish_model_selection(self, thread_id: str, model: str, effort: str) -> None:
         await self._publish({"method": "webui/modelSelected", "params": {"threadId": thread_id, "model": model, "effort": effort}})
+
+    async def _handle_browser_tool(self, request_id, params):
+        try:
+            result = await self.browser_tool_handler(params)
+            await self._send({"id": request_id, "result": result})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Never let a background tool exception include page content in logs.
+            with contextlib.suppress(Exception):
+                await self._send({"id": request_id, "result": {"success": False, "contentItems": [{"type": "inputText", "text": "Browser runtime unavailable"}]}})
 
     async def _publish(self, message: dict[str, Any]) -> None:
         for queue in tuple(self._subscribers):
