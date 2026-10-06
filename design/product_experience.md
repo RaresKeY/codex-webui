@@ -16,7 +16,7 @@ The context sidebar should read as part of the app: a square, edge-attached spli
 
 Command activity uses shared compact disclosure rows, label-adjacent right/down arrows and a small tree indent for children, with a Shell/output surface only for the opened command. See `../specs/work_activity.md` for shared ownership and scrollbar clearance. The chat keeps intermediate turn work behind a quiet Worked disclosure, with final answers outside it. A header toggle opens a compact Sources/Outputs overlay over the conversation without moving transcript or composer alignment. Entering a narrow viewport closes it automatically; the full contextual pane remains the larger workspace surface. Response actions offer copy and an inclusive branch into a new native chat, without ratings. Timestamps appear on hover/focus (directly on touch). Current boundaries are in `specs/turn_presentation.md`.
 
-The current experimental pane is flush with the app edge, resizable at its left divider and opened through the header control. Jev stays in its sidebar tab. Worked activity uses compact aligned disclosures, and tables offer independent soft wrapping.
+The current experimental pane is flush with the app edge, shares one saved width across all tools, is resizable at its left divider and opened through the header control. Jev stays in its sidebar tab. Worked activity uses compact aligned disclosures, and tables offer independent soft wrapping.
 
 Workspace file links open an integrated file pane with a compact tab, breadcrumbs and numbered plain-text editor, with the folder tree alongside on desktop and below on phones. Drafts stay in app memory across pane changes. See `../specs/workspace_files.md` for current limits.
 

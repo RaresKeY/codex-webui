@@ -97,6 +97,8 @@ The current review removes all inline Jev process controls, adds a pointer/keybo
 
 - Human browser input passed 203 final backend and 109 frontend tests, production desktop/390px/320px input checks, native offline lifecycle, and an audited real Chromium smoke for manual iframe click, typing/backspace and persistent-cookie survival across restart. Dedicated cookie profile was retained through private HTTPS deployment and the browser view reopened. See `evidence/ui/browser-input/review.md`.
 
+- One shared context width passed production Firefox checks across all seven tabs, pointer/keyboard resize, pane reopen and reload, phone clamping that retains the saved desktop preference, and restoration at desktop size. See `evidence/ui/shared-pane-width/review.md`.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

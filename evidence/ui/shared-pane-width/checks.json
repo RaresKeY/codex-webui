@@ -1,0 +1,25 @@
+{
+  "syntheticFixtures": true,
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "320x640"
+  ],
+  "checks": [
+    "turn-linked sidebar",
+    "process stages",
+    "probabilities and usage",
+    "native status",
+    "pagination",
+    "no five-second polling",
+    "event updates preserve older runs",
+    "chat isolation",
+    "phone fit",
+    "read failure and reload",
+    "one saved width across all context tools",
+    "reload persistence",
+    "narrow clamping preserves desktop preference"
+  ],
+  "uncaughtJavaScriptErrors": 0,
+  "modelCalls": 0
+}

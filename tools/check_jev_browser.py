@@ -174,6 +174,11 @@ def main():
                 evaluate("(() => {document.querySelector('.context-resize-handle').focus();return true})()")
                 key('\ue012')
                 wait(f"Math.abs(document.querySelector('.context-panel').getBoundingClientRect().width-{separator['width']+116}) < 2")
+                shared_width = evaluate("document.querySelector('.context-panel').getBoundingClientRect().width")
+                for tool in ['Outputs','Browser','Terminal','Side chats','Explorer','Changes','Jev']:
+                    evaluate(f"(() => {{[...document.querySelectorAll('.context-tool-tabs button')].find(b => b.textContent.startsWith({json.dumps(tool)})).click();return true}})()")
+                    wait(f"Math.abs(document.querySelector('.context-panel').getBoundingClientRect().width-{shared_width}) < 2")
+                assert evaluate("Number(localStorage.getItem('codex-webui.context-width'))") == shared_width
                 screenshot('desktop-resized.png')
                 evaluate("(() => {document.querySelector('.context-resize-handle').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));return true})()")
                 screenshot('desktop.png')
@@ -266,10 +271,32 @@ def main():
                     screenshot(f'phone-{width}-browser-chrome.png')
                     click('[aria-label="Close context panel"]')
 
+                viewport(1440,1000)
+                click('[aria-label="Open context panel"]')
+                wait("document.querySelector('.context-resize-handle') !== null")
+                evaluate("(() => {document.querySelector('.context-resize-handle').focus();return true})()")
+                key('\ue012')
+                preferred_width = evaluate("Number(localStorage.getItem('codex-webui.context-width'))")
+                assert preferred_width == 456
+                viewport(320,640)
+                click('[aria-label="Open context panel"]')
+                wait("document.querySelector('.context-panel') !== null")
+                assert evaluate("document.querySelector('.context-panel').getBoundingClientRect().width") == 320
+                assert evaluate("Number(localStorage.getItem('codex-webui.context-width'))") == preferred_width
+                viewport(1440,1000)
+                click('[aria-label="Open context panel"]')
+                wait(f"document.querySelector('.context-panel')?.getBoundingClientRect().width === {preferred_width}")
+                bidi.command('browsingContext.navigate', {'context':context,'url':url,'wait':'complete'})
+                wait("document.querySelector('.chat-title') !== null")
+                click('.chat-title')
+                wait("document.querySelector('[aria-label=\"Open context panel\"]') !== null")
+                click('[aria-label="Open context panel"]')
+                wait(f"document.querySelector('.context-panel')?.getBoundingClientRect().width === {preferred_width}")
+                screenshot('desktop-shared-width.png')
                 errors = [event for event in bidi.events if event.get('method')=='log.entryAdded' and event.get('params',{}).get('type')=='javascript' and event.get('params',{}).get('level')=='error']
                 assert not errors, f'{len(errors)} uncaught JavaScript errors'
                 assert JevFixtures.calls == [], JevFixtures.calls
-                result = {'syntheticFixtures':True,'viewports':['1440x1000','390x844','320x640'],'checks':['turn-linked sidebar','process stages','probabilities and usage','native status','pagination','no five-second polling','event updates preserve older runs','chat isolation','phone fit','read failure and reload'],'uncaughtJavaScriptErrors':len(errors),'modelCalls':0}
+                result = {'syntheticFixtures':True,'viewports':['1440x1000','390x844','320x640'],'checks':['turn-linked sidebar','process stages','probabilities and usage','native status','pagination','no five-second polling','event updates preserve older runs','chat isolation','phone fit','read failure and reload','one saved width across all context tools','reload persistence','narrow clamping preserves desktop preference'],'uncaughtJavaScriptErrors':len(errors),'modelCalls':0}
                 (output/'checks.json').write_text(json.dumps(result,indent=2)+'\n')
                 print('Jev checks passed: chronological collapsed sidebar and right/down disclosures, event updates without polling, chat isolation, desktop/phone; no model calls.')
 

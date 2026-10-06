@@ -24,12 +24,8 @@
 .workspace-tree-entry .tree-row { padding: 5px 3px; height: 30px; font-size: 12px; }
 .workspace-file-error { padding: 6px 10px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .workspace-file-tree .workspace-file-error { padding: 0; }
-.app-shell.file-open { --context-width: min(clamp(560px, 54vw, 1000px), calc(100vw - var(--sidebar-width) - 360px)); }
-.app-shell.left-closed.file-open { --context-width: min(clamp(560px, 54vw, 1000px), calc(100vw - 360px)); }
-@media (max-width: 1000px) { .app-shell.file-open, .app-shell.left-closed.file-open { --context-width: min(760px, 100vw); } }
 @media (max-width: 540px) { .workspace-file-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 1fr) 210px; } .workspace-file-tree { border-left: 0; border-top: 1px solid var(--line); } .workspace-file-actions .icon-button { width: 40px; height: 40px; } .workspace-tree-entry .tree-row { min-height: 40px; } }
 
-@media (max-width: 1000px) { .file-open .context-panel { width: min(var(--context-user-width, 760px), 100vw); } }
 
 .workspace-numbered-editor textarea:focus-visible { outline: 1px solid var(--line-focus-soft); }
 

@@ -459,7 +459,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
 
 @media (max-width: 1280px) {
-  :root { --sidebar-width: 280px; --context-width: 400px; }
+  :root { --sidebar-width: 280px; --context-width: 440px; }
   .event-feed, .composer-wrap { padding-left: 30px; padding-right: 30px; }
   .connection-pill { display: none; }
   .image-grid { grid-template-columns: repeat(2, 1fr); }
@@ -738,7 +738,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 1000px) { .sidebar-archive-link, .chat-menu-action, .project-overflow > summary { min-height: 44px; } .project-overflow > summary { width: 44px; } }
 
 /* Browser uses the existing context host, with more room for the page on desktop. */
-.app-shell.browser-open { --context-width: clamp(420px, 46vw, 940px); }
+
 .browser-context { min-height: 0; display: flex; flex-direction: column; background: var(--canvas); }
 .browser-page { min-height: 0; flex: 1; overflow: auto; background: var(--canvas); }
 .browser-viewport { position: relative; width: 100%; overflow: hidden; }
@@ -752,7 +752,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .browser-status > span.live { background: #9ad3b1; }
 .browser-status small { margin-left: auto; font-size: 10px; }
 .browser-error { padding: 10px 12px; color: #ffb5b5; font-size: 12px; }
-@media (max-width: 1000px) { .browser-open .context-panel { width: min(680px, 100vw); } }
+
 @media (prefers-reduced-motion: reduce) { .browser-cursor { transition: none; } .browser-cursor.clicking::before { animation: none; } }
 .context-panel-toggle[hidden] { display: none; }
 
@@ -788,7 +788,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .context-resize-handle { position: absolute; top: 0; bottom: 0; left: 0; width: 8px; z-index: 20; cursor: col-resize; touch-action: none; }
 .context-resize-handle:hover, .context-resize-handle:focus-visible { background: var(--highlight-soft); outline: 1px solid var(--line-focus); }
 .context-resizing, .context-resizing * { cursor: col-resize !important; user-select: none !important; }
-@media (max-width: 1000px) { .context-panel { position: fixed; width: min(var(--context-user-width, 400px), 100vw); } .browser-open .context-panel { width: min(var(--context-user-width, 680px), 100vw); } }
+@media (max-width: 1000px) { .context-panel { position: fixed; width: min(var(--context-user-width, 400px), 100vw); } }
 
 .markdown-table-toolbar { display: flex; justify-content: flex-end; margin-bottom: -6px; }
 .markdown-table-toolbar button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--subtle); font-size: 11px; cursor: pointer; }

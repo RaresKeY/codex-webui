@@ -62,7 +62,9 @@ The open panel is a flush rectangular app region: no outer gap, radius or floati
 
 See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
 
-The default right pane is 440px on wide desktops and 400px below 1280px; Browser retains its wider live-page sizing. Explorer uses a wider `clamp(560px, 54vw, 1000px)` default to accommodate the editor and file tree, with a viewport-bounded narrow drawer. File widths also reserve 360px for the desktop conversation. At pane widths below 540px the tree moves below the editor. Tool tabs scroll horizontally without overlapping their labels and keep the selected tool visible. The left pane edge is draggable, bounded to preserve conversation space on desktop and viewport width on phones. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to reset the default tool width. Width survives opening/closing within the app session.
+The right pane has one shared 440px default and a single persisted width preference (`codex-webui.context-width` in local storage), reused by all tool tabs, conversations, pane reopenings and app reloads. Browser and Explorer have no separate width overrides. Phone/desktop bounds clamp the rendered width while preserving the saved preference; returning to a larger viewport restores that preference. Desktop bounds reserve 360px for the conversation. If browser storage is unavailable, resizing remains usable but persistence is not guaranteed. Storage events synchronize open same-origin windows. This additive client preference needs no server migration; older versions ignore it on rollback.
+
+At pane widths below 540px the file tree moves below the editor. Tool tabs scroll without overlapping labels and keep the selected tool visible. The left edge is draggable. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to clear the saved width and restore the shared default.
 
 ## Gaps
 
