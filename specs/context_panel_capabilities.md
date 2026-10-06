@@ -62,7 +62,7 @@ The open panel is a flush rectangular app region: no outer gap, radius or floati
 
 See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
 
-The left pane edge is draggable, bounded to preserve conversation space on desktop and viewport width on phones. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to reset the default tool width. Width survives opening/closing within the app session.
+The default right pane is 440px on wide desktops and 400px below 1280px; Browser retains its wider live-page sizing. The left pane edge is draggable, bounded to preserve conversation space on desktop and viewport width on phones. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to reset the default tool width. Width survives opening/closing within the app session.
 
 ## Gaps
 

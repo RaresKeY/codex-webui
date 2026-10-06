@@ -23,6 +23,7 @@ from check_sidebar_browser import SidebarFixtures
 class JevFixtures(SidebarFixtures):
     fail_activity = False
     activity_reads = 0
+    browser_actions = []
     records = [{"id": index, "thread_id": "c1", "turn_id": "t0" if index in (5, 3) else None,
                 "source": {5: "auto", 4: "auto", 3: "manual", 2: "auto", 1: "preview"}[index],
                 "status": {5: "submitted", 4: "stopped", 3: "submitted", 2: "pending", 1: "classified"}[index],
@@ -37,6 +38,8 @@ class JevFixtures(SidebarFixtures):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path.startswith("/api/threads/") and path.endswith("/browser"):
+            return self.reply({"available":True,"agentAvailable":False,"open":False,"width":1280,"height":900,"revision":0})
         if path.startswith("/api/threads/") and path.endswith("/jev/activity"):
             type(self).activity_reads += 1
             if self.fail_activity:
@@ -48,6 +51,13 @@ class JevFixtures(SidebarFixtures):
         if path.startswith("/api/jev/activity/") and path.endswith("/turn"):
             return self.reply({"threadId": "c1", "turnId": "t0", "status": "completed"})
         return super().do_GET()
+
+    def do_POST(self):
+        if urlsplit(self.path).path.endswith('/browser'):
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', '0'))))
+            type(self).browser_actions.append(body)
+            return self.reply({"available":True,"agentAvailable":False,"open":False,"width":1280,"height":900,"revision":1,"url":body.get('url','')})
+        return super().do_POST()
 
 
 
@@ -120,6 +130,7 @@ def main():
                 wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && !document.querySelector('.message-jev-process')")
                 assert not evaluate("Boolean(document.querySelector('.context-panel'))")
                 assert not evaluate("Boolean(document.querySelector('.jev-turn-step'))")
+                assert not evaluate("[...document.querySelectorAll('.sidebar-nav button')].some(b => b.textContent.trim() === 'Jev')")
                 assert not evaluate("Boolean(document.querySelector('.message-author .message-jev-process'))")
                 if not args.baseline_bundle:
                     opener = evaluate("(() => {const b=document.querySelector('.context-panel-toggle'),r=b.getBoundingClientRect();return {width:r.width,height:r.height,expanded:b.getAttribute('aria-expanded'),right:r.right};})()")
@@ -199,7 +210,8 @@ def main():
                     click('[aria-label="Expand conversations"]')
                 evaluate("(() => {Array.from(document.querySelectorAll('.chat-title')).find(button=>button.textContent.includes('Conversation 1 —')).click();return true;})()")
                 wait("document.querySelector('.chat-heading').textContent.includes('Conversation 1 —')")
-                evaluate("(() => {Array.from(document.querySelectorAll('.sidebar-nav button')).find(b=>b.textContent==='Jev').click();return true;})()")
+                click('[aria-label="Open context panel"]')
+                evaluate("(() => { [...document.querySelectorAll('.context-tool-tabs button')].find(b => b.textContent === 'Jev').click(); return true })()")
                 wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 1")
                 assert not evaluate("document.querySelector('.jev-context').textContent.includes('1,200')"), 'Other chat details leaked'
                 wait("!document.querySelector('.jev-context-heading button').disabled")
@@ -210,6 +222,13 @@ def main():
                 JevFixtures.fail_activity = False
                 click('[aria-label="Reload Jev history"]')
                 wait("!document.querySelector('.jev-context [role=alert]')")
+                evaluate("(() => { [...document.querySelectorAll('.context-tool-tabs button')].find(b => b.textContent === 'Browser').click(); return true })()")
+                wait("document.querySelector('[aria-label=\"Browser address\"]')?.type === 'text'")
+                evaluate("(() => {const input=document.querySelector('[aria-label=\"Browser address\"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'duckduckgo.com');input.dispatchEvent(new Event('input',{bubbles:true}));return true})()")
+                wait("!document.querySelector('.browser-toolbar button[type=submit]').disabled")
+                evaluate("(() => {document.querySelector('.browser-toolbar').requestSubmit();return true})()")
+                wait("document.querySelector('[aria-label=\"Browser address\"]').value === 'https://duckduckgo.com/'")
+                assert JevFixtures.browser_actions == [{'action':'open','url':'https://duckduckgo.com/'}]
                 errors = [event for event in bidi.events if event.get('method')=='log.entryAdded' and event.get('params',{}).get('type')=='javascript' and event.get('params',{}).get('level')=='error']
                 assert not errors, f'{len(errors)} uncaught JavaScript errors'
                 assert JevFixtures.calls == [], JevFixtures.calls

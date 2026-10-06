@@ -1,3 +1,4 @@
+import { browserAddress } from './browser-address'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, Globe, MousePointer2, RefreshCw, X } from 'lucide-react'
 
@@ -61,7 +62,7 @@ export function BrowserContext({ threadId, signal }: { threadId?: string; signal
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Browser action failed') }
     finally { actionBusy.current = false; if (!controller.signal.aborted) setBusy(false) }
   }
-  const navigate = (event: FormEvent) => { event.preventDefault(); if (url?.trim()) void act('open', url.trim()) }
+  const navigate = (event: FormEvent) => { event.preventDefault(); const address = browserAddress(url ?? ''); if (address) void act('open', address); else setError('Enter a valid website address.') }
   const currentSignal = signal?.threadId === threadId ? signal : null
   const cursor = currentSignal && currentSignal.revision >= (state?.revision ?? 0) ? currentSignal.cursor : state?.cursor
   const title = state?.title || 'New tab'
@@ -70,7 +71,7 @@ export function BrowserContext({ threadId, signal }: { threadId?: string; signal
     <form className="browser-toolbar" onSubmit={navigate}>
       <button type="button" aria-label="Browser back" disabled={!state?.open || busy} onClick={() => { void act('back') }}><ArrowLeft size={16} /></button>
       <button type="button" aria-label="Reload browser page" disabled={!state?.open || busy} onClick={() => { void act('reload') }}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button>
-      <input aria-label="Browser address" type="url" placeholder="Enter an HTTPS address" value={url ?? state?.url ?? ''} onChange={event => setUrl(event.target.value)} disabled={state?.available === false || busy} />
+      <input aria-label="Browser address" type="text" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="Enter a website address" value={url ?? state?.url ?? ''} onChange={event => setUrl(event.target.value)} disabled={state?.available === false || busy} />
       <button type="submit" disabled={!url?.trim() || busy || !state?.available}>Go</button>
     </form>
     {(error || frameError) && <div className="browser-error" role="alert">{error || frameError}</div>}

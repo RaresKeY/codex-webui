@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Activity, ChevronRight, RefreshCw } from 'lucide-react'
+import { Workflow, ChevronRight, RefreshCw } from 'lucide-react'
 import { loadJevTurn } from './api'
 import { activityStatus, type JevActivity, type JevTurn, type JevChatState } from './jev-activity'
 import './jev-activity.css'
@@ -60,12 +60,12 @@ export function JevContext({ threadId, state, onLoad }: { threadId?: string; sta
     <div className="jev-context-heading"><h3>This chat’s Jev process</h3><button type="button" className="icon-button" aria-label="Reload Jev history" disabled={!threadId || state.loading} onClick={() => onLoad()}><RefreshCw size={15} /></button></div>
     <p className="jev-hint">Each run belongs to a turn. Updates arrive when Jev runs. Earlier turns have no reconstructed routing record; manual selections skip Jev.</p>
     {state.error && <p className="notice" role="alert">{state.error}</p>}
-    {!state.items.length && !state.error && <p className="jev-empty" role="status"><Activity size={24} />{!threadId ? 'Open a chat to see its Jev process.' : state.loading ? 'Loading this chat’s Jev history…' : 'No Jev runs in this chat yet.'}</p>}
+    {!state.items.length && !state.error && <p className="jev-empty" role="status"><Workflow size={24} />{!threadId ? 'Open a chat to see its Jev process.' : state.loading ? 'Loading this chat’s Jev history…' : 'No Jev runs in this chat yet.'}</p>}
     <div className="jev-list">{[...state.items].sort((a, b) => a.id - b.id).map(item => <ActivityRecord key={item.id} item={item} />)}</div>
     {state.cursor !== null && <button type="button" className="button jev-more" disabled={state.loading} onClick={() => onLoad(state.cursor!)}>Load older runs</button>}
   </section>
 }
 
 export function JevTurnStep({ item, onOpen }: { item: JevActivity; onOpen: () => void }) {
-  return <button type="button" className="jev-turn-step" onClick={onOpen} aria-label="Open this turn’s Jev process"><Activity size={14} /><strong>Jev</strong><span>{activityStatus(item)}{item.decision?.model && ` · ${item.decision.model.replace('gpt-', '')} · ${item.decision.effort}`}</span><span className="jev-step-details">Process <ChevronRight size={13} /></span></button>
+  return <button type="button" className="jev-turn-step" onClick={onOpen} aria-label="Open this turn’s Jev process"><Workflow size={14} /><strong>Jev</strong><span>{activityStatus(item)}{item.decision?.model && ` · ${item.decision.model.replace('gpt-', '')} · ${item.decision.effort}`}</span><span className="jev-step-details">Process <ChevronRight size={13} /></span></button>
 }

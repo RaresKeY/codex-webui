@@ -7,7 +7,7 @@ import {
   File, FileCode2, FileJson, FileText, Files, Folder, FolderGit2, FolderOpen,
   Globe, SlidersHorizontal, GitBranch, Image, Images, LayoutGrid, Menu, MessageSquareText, MoreHorizontal,
   PanelLeftOpen, PanelRightOpen, PanelRightClose, Play, Plus, RefreshCw, Save, Search,
-  ShieldCheck, Sparkles, Terminal, Trash2, UserRound, Wifi, WifiOff, X,
+  ShieldCheck, Sparkles, Terminal, Trash2, UserRound, Wifi, WifiOff, Workflow, X,
 } from 'lucide-react'
 import { forkConversation, loadJevActivity, archiveConversation, restoreConversation, deleteConversation, deleteProject, connectChatActivity, readChatImageHistory, pinConversation, assignConversationProject, connectConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversations, loadOptionalMetadata, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import type { RoutingDecision, RoutingStage } from './api'
@@ -116,7 +116,6 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
       <nav className="sidebar-nav" aria-label="Workspace">
         <button className="new-chat" onClick={onNewChat}><Edit3 size={20} />New chat</button>
         <button className={searchOpen ? 'active' : ''} aria-expanded={searchOpen} aria-controls="sidebar-search" onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><Search size={20} />Search chats<span className="sidebar-shortcut" aria-hidden="true">⌘ K</span></button>
-        <button onClick={() => onResource('jev')}><Activity size={20} />Jev</button>
         {searchOpen && <div id="sidebar-search" className="sidebar-search"><label className="search-field"><Search size={18} className={searching ? 'searching' : ''} /><input ref={searchInput} value={query} onChange={event => { setQuery(event.target.value); setSearching(false); setSearchError(false); if (!event.target.value) setRemoteChats(null) }} placeholder="Search chats" aria-label="Search all resumable chats" /><button type="button" onClick={closeSearch} aria-label="Close chat search"><X size={17} /></button></label></div>}
       </nav>
       <button type="button" className={`sidebar-archive-link ${view === 'archived' ? 'active' : ''}`} onClick={() => setView('archived')}><Archive size={18} />Archived chats</button>
@@ -261,7 +260,6 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, visible, conversation, 
   const [executionChoice, setExecutionChoice] = useState<ChatExecution | null>(null)
   const [permissionsBusy, setPermissionsBusy] = useState(false)
   const [decision, setDecision] = useState<RoutingDecision | null>(null)
-  const [acceptedDecision, setAcceptedDecision] = useState<RoutingDecision | null>(null)
   const submitting = useRef(false)
   const sendController = useRef<AbortController | null>(null)
   const mounted = useRef(true)
@@ -331,7 +329,7 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, visible, conversation, 
         if (stage === 'routing') { onTurnAction({ type: 'submitted', requestId }); onConversationStatus('running') }
       }, controller.signal, [], mentions)
       if (!mounted.current) return true
-      setAcceptedDecision(result.decision)
+      setDecision(result.decision)
       onTurnAction({ type: 'acknowledged', requestId, turnId: result.turnId })
       if (isUntitledConversation(currentTitle.current) && autoTitleThread.current !== conversation.id) {
         const provisionalTitle = deriveConversationTitle(content)
@@ -380,7 +378,7 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, visible, conversation, 
       <div ref={endRef} />
     </section>
     {summaryOpen && !contextOpen && <ChatSummary events={events} onClose={closeSummary} onOutputs={onOutputs} />}
-    <Composer conversation={conversation} cwd={conversation.cwd} threadId={conversation.id} busy={historyLoading || turnActive || routingStage !== null || voiceState === 'live' || voiceState === 'connecting'} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} onPermissionsChanging={setPermissionsBusy} permissionsBusy={permissionsBusy} onExecutionSelection={setExecutionChoice} lastModel={recordedSelection?.model ?? acceptedDecision?.model ?? conversation.lastTurnModel} lastEffort={recordedSelection?.effort ?? acceptedDecision?.effort ?? conversation.lastTurnEffort} manualExecution={Boolean(executionChoice && executionChoice.model !== "auto")} />
+    <Composer conversation={conversation} cwd={conversation.cwd} threadId={conversation.id} busy={historyLoading || turnActive || routingStage !== null || voiceState === 'live' || voiceState === 'connecting'} onSend={onSend} voiceEnabled={voiceEnabled} voiceState={effectiveVoiceState} voiceMessage={effectiveVoiceMessage} onVoiceToggle={toggleVoice} onPermissionsChanging={setPermissionsBusy} permissionsBusy={permissionsBusy} onExecutionSelection={setExecutionChoice} lastModel={headerSelection?.model} lastEffort={headerSelection?.effort} manualExecution={Boolean(executionChoice && executionChoice.model !== "auto")} />
     {renaming && <Modal title="Rename conversation" description="Choose a concise name that will be easy to find later." onClose={closeRename}><form className="modal-form rename-modal-form" onSubmit={submitRename}><label>Conversation name<input autoFocus maxLength={200} value={renameValue} onChange={event => setRenameValue(event.target.value)} onFocus={event => event.currentTarget.select()} onKeyDown={event => { if (event.key === 'Escape') closeRename() }} aria-label="Conversation name" /></label>{renameError && <p className="modal-error" role="alert">{renameError}</p>}<footer><button type="button" className="button" disabled={savingName} onClick={closeRename}>Cancel</button><button className="button primary" disabled={!renameValue.trim() || savingName}>{savingName ? 'Saving…' : 'Save'}</button></footer></form></Modal>}
   </main>
 }
@@ -405,7 +403,7 @@ function FileTreeItem({ file, level, activePath, onSelect, onExpand }: { file: W
 }
 
 const contextToolIcons: Record<ContextToolId, ComponentType<{ size?: number }>> = {
-  jev: Activity,
+  jev: Workflow,
   outputs: Activity,
   browser: LayoutGrid,
   terminal: Terminal,
@@ -1096,7 +1094,7 @@ export default function App() {
   const newChat = () => showView('new')
   return <div className={`app-shell ${rightOpen && activeContextTool === 'browser' ? 'browser-open' : ''} ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
     {!leftOpen && view !== 'chat' && view !== 'new' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
-    {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { if (tool === 'jev' && activeId) showView('chat'); setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
+    {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={closeLeft} />
     <div className="content-area" inert={leftOpen && isNarrowLayout() ? true : undefined}>
       {activeConversation && <ChatSurface onBranch={async turnId => { const fork = await forkConversation(activeConversation.id, turnId); selectConversation(fork) }} onOutputs={() => { setActiveContextTool('outputs'); openRight() }} contextOpen={rightOpen} visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}

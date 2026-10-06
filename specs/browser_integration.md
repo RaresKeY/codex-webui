@@ -47,6 +47,8 @@ The visible Browser sits in the flush context region with square outer edges, a 
 
 Closing or switching away from a browser pane aborts its pending client action. A synchronous guard prevents duplicate actions, and generation checks discard frame responses predating a completed action. Event streams back off for one second on clean EOF as well as transport failure, avoiding a tight reconnect loop.
 
+The browser address bar accepts bare domains and protocol-relative addresses, adding HTTPS before submission. Explicit HTTP(S) protocols remain unchanged for backend validation; invalid or credential-bearing addresses are rejected. Native URL input validation cannot block bare-domain submission.
+
 ## Gaps
 
 - The page is a periodically refreshed screenshot, with view-only pixels; full interactive browser input, multiple tabs, uploads, downloads, popup/frame workflows and mobile page emulation are absent.

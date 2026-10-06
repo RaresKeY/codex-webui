@@ -341,6 +341,7 @@ def main():
                 click('[aria-label="Send message"]')
                 wait("document.querySelector('textarea').value === '' && document.querySelector('.chat-progress') !== null")
                 assert evaluate("document.querySelectorAll('.event-feed .spin').length === 1 && !document.querySelector('.turn-activity') && !document.querySelector('.response-placeholder') && !document.querySelector('.send-button .spin')")
+                assert evaluate("document.querySelector('.composer-last-model').textContent.replaceAll(' ','').includes(document.querySelector('.chat-model-select strong').textContent) && document.querySelector('.composer-last-model small').textContent === document.querySelector('.chat-model-effort').textContent"), 'Composer lagged behind the selected model/effort'
                 screenshot('desktop-working.png')
                 wait("document.querySelector('.chat-progress')?.textContent.includes('Responding')")
                 assert evaluate("document.querySelectorAll('.event-feed .spin').length === 1")

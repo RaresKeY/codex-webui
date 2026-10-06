@@ -152,8 +152,9 @@ def main():
                     if args.url:
                         if width<1000:
                             click('[aria-label="Expand conversations"]')
-                        evaluate("(() => {Array.from(document.querySelectorAll('.sidebar-nav > button')).find(button=>button.textContent.trim()==='Jev').click();return true})()")
-                        wait("Boolean(document.querySelector('.jev-page .page-header > button')) && !document.querySelector('.jev-page .page-header > button').disabled")
+                        evaluate("(() => {document.querySelector('[aria-label=\"Open context panel\"]').click();return true})()")
+                        evaluate("(() => { [...document.querySelectorAll('.context-tool-tabs button')].find(b => b.textContent === 'Jev').click(); return true })()")
+                        wait("Boolean(document.querySelector('.jev-context-heading button')) && !document.querySelector('.jev-context-heading button').disabled")
                         assert evaluate("!document.querySelector('.jev-page [role=\"alert\"]') && document.documentElement.scrollWidth <= innerWidth"), 'Live Jev page failed'
                 errors=[event for event in bidi.events if event.get('method')=='log.entryAdded' and event.get('params',{}).get('type')=='javascript' and event.get('params',{}).get('level')=='error']
                 assert not errors, f'{len(errors)} uncaught JavaScript errors'

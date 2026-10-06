@@ -46,6 +46,8 @@ The context ring is in the composer immediately before the execution/model contr
 
 See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
 
+The composer and chat header use the same selected model/effort projection, including live routing-stage decisions and native acknowledgement. A previous reply’s model cannot mask a newer selection in the composer.
+
 ## Gaps
 
 - Catalog/input APIs use the installed 0.160.0 schema; real skill/plugin/app execution and paid model transports remain unverified. Explicit selections are revalidated, but manually typed native `$` syntax can still be interpreted by Codex itself.

@@ -4,7 +4,7 @@ Owners: `backend/app/jev_activity.py`, `chat_service.py`, `task_router.py`, `dat
 
 ## Behavior
 
-Jev is a context sidebar for the selected chat, available only from its sidebar tab. Responses contain no Jev process link or separate routing row. Runs display oldest to newest, with new records appended at the bottom and older paginated runs inserted above. Every row starts collapsed and expands only manually; stage updates preserve its disclosure state. The arrow points right when closed and down when open. Records expand manually in the sidebar; earlier turns have no reconstructed records.
+Jev is a context sidebar for the selected chat, available only from its sidebar tab. Responses contain no Jev process link or separate routing row. Runs display oldest to newest, with new records appended at the bottom and older paginated runs inserted above. Every row starts collapsed and expands only manually; stage updates preserve its disclosure state. The arrow points right when closed and down when open. Jev has a distinct workflow icon in the right sidebar and no left-navigation shortcut. Records expand manually in the sidebar; earlier turns have no reconstructed records.
 
 Effort probability rows have a fixed top-to-bottom order: max, xhigh, high, medium, low (lowest effort at the bottom), independent of payload key order. Model probabilities retain their supplied order.
 

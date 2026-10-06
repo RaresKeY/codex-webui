@@ -5,7 +5,7 @@
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --rail-width: 0px;
   --sidebar-width: 280px;
-  --context-width: 360px;
+  --context-width: 440px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -459,7 +459,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
 
 @media (max-width: 1280px) {
-  :root { --sidebar-width: 280px; --context-width: 310px; }
+  :root { --sidebar-width: 280px; --context-width: 400px; }
   .event-feed, .composer-wrap { padding-left: 30px; padding-right: 30px; }
   .connection-pill { display: none; }
   .image-grid { grid-template-columns: repeat(2, 1fr); }
