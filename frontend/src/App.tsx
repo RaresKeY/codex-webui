@@ -7,14 +7,14 @@ import {
   PanelLeftOpen, PanelRightClose, Play, Plus, RefreshCw, Save, Search,
   ShieldCheck, Sparkles, Terminal, Trash2, UserRound, Wifi, WifiOff, X,
 } from 'lucide-react'
-import { archiveConversation, restoreConversation, deleteConversation, deleteProject, connectChatActivity, readChatImageHistory, pinConversation, assignConversationProject, connectConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversations, loadOptionalMetadata, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
+import { loadJevActivity, archiveConversation, restoreConversation, deleteConversation, deleteProject, connectChatActivity, readChatImageHistory, pinConversation, assignConversationProject, connectConversation, createProject, createSchedule, deleteImage, importImages, listImages, loadBackgroundTerminals, loadBootstrap, loadConversations, loadOptionalMetadata, loadConversationSnapshot, loadFile, loadRealtimeCapability, loadWorkspaceChanges, loadWorkspaceTree, renameConversation, requestUpdate, respondApproval, runSchedule, saveFile, searchConversations, sendPrompt, turnStartFailureMessage, updateSchedule } from './api'
 import type { RoutingDecision, RoutingStage } from './api'
 import { deriveConversationTitle, isUntitledConversation } from './conversation-title'
 import { chatImageAssets, type ChatImageAsset } from './chat-images'
 import { readUnreadChats, saveUnreadChats } from './unread-chats'
 import { ArchivedChats } from './ArchivedChats'
-import { JevActivityPage } from './JevActivityPage'
-import { loadActivityConversation } from './api'
+import { JevContext, JevTurnStep } from './JevContext'
+import { EMPTY_JEV_CHAT, mergeActivity, jevTranscript, type JevActivity, type JevChatState } from './jev-activity'
 import { LaunchPad } from './LaunchPad'
 import { ChatActivityMark } from './ChatActivityMark'
 import { recoverChatActivity, reconcileChat, reduceChatActivity, type ChatActivity } from './chat-activity'
@@ -112,7 +112,7 @@ function ChatSidebar({ data, activeId, view, setView, onSelect, onClose, onNewCh
       <nav className="sidebar-nav" aria-label="Workspace">
         <button className="new-chat" onClick={onNewChat}><Edit3 size={20} />New chat</button>
         <button className={searchOpen ? 'active' : ''} aria-expanded={searchOpen} aria-controls="sidebar-search" onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><Search size={20} />Search chats<span className="sidebar-shortcut" aria-hidden="true">⌘ K</span></button>
-        <button className={view === 'jev' ? 'active' : ''} onClick={() => setView('jev')}><Activity size={20} />Jev</button>
+        <button onClick={() => onResource('jev')}><Activity size={20} />Jev</button>
         {searchOpen && <div id="sidebar-search" className="sidebar-search"><label className="search-field"><Search size={18} className={searching ? 'searching' : ''} /><input ref={searchInput} value={query} onChange={event => { setQuery(event.target.value); setSearching(false); setSearchError(false); if (!event.target.value) setRemoteChats(null) }} placeholder="Search chats" aria-label="Search all resumable chats" /><button type="button" onClick={closeSearch} aria-label="Close chat search"><X size={17} /></button></label></div>}
       </nav>
       <button type="button" className={`sidebar-archive-link ${view === 'archived' ? 'active' : ''}`} onClick={() => setView('archived')}><Archive size={18} />Archived chats</button>
@@ -242,9 +242,11 @@ interface ChatSurfaceProps {
   leftOpen: boolean
   toggleLeft: () => void
   openRight: () => void
+  jevItems: JevActivity[]
+  onOpenJev: (id: number) => void
 }
 
-function ChatSurface({ visible, conversation, project, projects, events, turn, historyLoading, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
+function ChatSurface({ jevItems, onOpenJev, visible, conversation, project, projects, events, turn, historyLoading, connection, realtimeSignal, voiceCapability, setEvents, onTurnAction, onConversationStatus, onTurnModel, onAssignProject, onRename, leftOpen, toggleLeft, openRight }: ChatSurfaceProps) {
   const feedRef = useRef<HTMLElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -348,7 +350,7 @@ function ChatSurface({ visible, conversation, project, projects, events, turn, h
       if (mounted.current) setRoutingStage(null)
     }
   }
-  const feedEntries = groupEventFeed(events)
+  const feedEntries = groupEventFeed(jevTranscript(events, jevItems))
   const latestReply = events.filter(event => event.role === 'assistant' && (event.kind === 'message' || event.kind === 'image')).at(-1)
   const recordedSelection = typeof latestReply?.meta?.model === 'string' && typeof latestReply.meta.effort === 'string'
     ? { model: latestReply.meta.model, effort: latestReply.meta.effort }
@@ -367,7 +369,7 @@ function ChatSurface({ visible, conversation, project, projects, events, turn, h
       {events.length === 0 && <div className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>A clear space to think, create, and get things done.</p><div className="welcome-hints"><span><Code2 size={16} />Build something</span><span><Search size={16} />Explore a project</span><span><Sparkles size={16} />Refine an idea</span></div></div>}
       {feedEntries.map(entry => entry.type === 'commands'
         ? <CommandGroup commands={entry.commands} key={entry.id} />
-        : <EventCard event={entry.event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
+        : entry.event.meta?.jevActivityId ? <JevTurnStep key={entry.event.id} item={jevItems.find(item => item.id === entry.event.meta?.jevActivityId)!} onOpen={() => onOpenJev(Number(entry.event.meta?.jevActivityId))} /> : <EventCard event={entry.event} conversationId={conversation.id} cwd={conversation.cwd} fallbackModel={conversation.model} key={entry.event.id} onApproval={(id, approved) => setEvents(current => current.map(item => item.id === id ? { ...item, state: approved ? 'done' : 'failed', content: approved ? `${item.content}\nApproved for this run.` : `${item.content}\nDenied.` } : item))} />)}
       {(routingStage || turnActive || historyLoading) && <div className="chat-progress" role="status" aria-live="polite"><RefreshCw size={14} className="spin" /><span>{routingStage === 'routing' ? 'Choosing the right model…' : routingStage === 'switching' ? `Switching to ${decision?.model}…` : routingStage === 'sending' ? 'Sending your message…' : turnActive ? turn.phase === 'streaming' ? 'Responding…' : 'Thinking…' : 'Loading conversation…'}</span></div>}
       <div ref={endRef} />
     </section>
@@ -396,6 +398,7 @@ function FileTreeItem({ file, level, activePath, onSelect, onExpand }: { file: W
 }
 
 const contextToolIcons: Record<ContextToolId, ComponentType<{ size?: number }>> = {
+  jev: Activity,
   outputs: Activity,
   browser: LayoutGrid,
   terminal: Terminal,
@@ -478,7 +481,7 @@ function SideChatsContext({ conversations, current, onSelect }: { conversations:
   </section>
 }
 
-function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal }: { browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
+function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal, jevState, selectedJev, onLoadJev }: { jevState: JevChatState; selectedJev?: number; onLoadJev: (before?: number) => void; browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
   const [tree, setTree] = useState(files)
   const [treeError, setTreeError] = useState('')
   const [selected, setSelected] = useState<WorkspaceFile | null>(null)
@@ -543,6 +546,7 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
         return <button key={tool.id} role="tab" aria-selected={activeTool === tool.id} aria-controls={`context-tool-${tool.id}`} className={activeTool === tool.id ? 'active' : ''} onClick={() => onToolChange(tool.id)} title={`${tool.label} · ${tool.backing}`}><Icon size={15} /><span>{tool.label}</span>{tool.id === 'changes' && <i>{reportedChanges.length}</i>}</button>
       })}
     </div>
+    {activeTool === 'jev' && <JevContext key={currentConversation?.id} threadId={currentConversation?.id} state={jevState} selectedId={selectedJev} onLoad={onLoadJev} />}
     {activeTool === 'outputs' && <OutputsContext events={events} />}
     {activeTool === 'browser' && <BrowserContext key={currentConversation?.id} threadId={demo ? undefined : currentConversation?.id} signal={browserSignal} />}
     {activeTool === 'terminal' && <TerminalContext key={currentConversation?.id ?? 'none'} conversationId={currentConversation?.id} demo={demo} />}
@@ -717,6 +721,23 @@ function conversationStatusForTurn(turn: TurnLifecycle): Conversation['status'] 
 }
 
 export default function App() {
+  const [jevByChat, setJevByChat] = useState<Record<string, JevChatState>>({})
+  const [selectedJevByChat, setSelectedJevByChat] = useState<Record<string, number>>({})
+  const jevRequests = useRef(new Map<string, AbortController>())
+  const loadJev = useCallback(async (id: string, before?: number) => {
+    if (!id) return
+    jevRequests.current.get(id)?.abort()
+    const controller = new AbortController(); jevRequests.current.set(id, controller)
+    setJevByChat(current => ({ ...current, [id]: { ...(current[id] ?? EMPTY_JEV_CHAT), loading: true, error: '' } }))
+    try {
+      const page = await loadJevActivity(id, before, controller.signal)
+      if (controller.signal.aborted) return
+      setJevByChat(current => { const old = current[id] ?? EMPTY_JEV_CHAT; return { ...current, [id]: { items: mergeActivity(old.items, page.data), cursor: before || !old.cursor ? page.nextCursor : old.cursor, loading: false, error: '' } } })
+    } catch {
+      if (!controller.signal.aborted) setJevByChat(current => ({ ...current, [id]: { ...(current[id] ?? EMPTY_JEV_CHAT), loading: false, error: 'This chat’s Jev history could not be loaded. Reload to try again.' } }))
+    } finally { if (jevRequests.current.get(id) === controller) jevRequests.current.delete(id) }
+  }, [])
+  useEffect(() => { const requests = jevRequests.current; return () => { requests.forEach(controller => controller.abort()) } }, [])
   const [data, setData] = useState<BootstrapPayload | null>(null)
   const [bootAttempt, setBootAttempt] = useState(0)
   const [bootError, setBootError] = useState('')
@@ -766,6 +787,7 @@ export default function App() {
   }, [data])
 
   useLayoutEffect(() => { activeIdRef.current = activeId }, [activeId])
+  useEffect(() => { const requests = jevRequests.current; if (activeId && !data?.demo) void loadJev(activeId); return () => { requests.get(activeId)?.abort() } }, [activeId, data?.demo, loadJev])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -799,7 +821,7 @@ export default function App() {
       if (!controller.signal.aborted) setData(current => current ? { ...current, ...metadata } : current)
     })
     return () => controller.abort()
-  }, [ready])
+  }, [ready, loadJev])
   useEffect(() => {
     if (!ready) return
     let disposed = false
@@ -832,6 +854,10 @@ export default function App() {
       finally { reconciling = false }
     }
     const disconnect = connectChatActivity((id, update) => {
+      if (update.jevActivity && update.jevActivity.source !== 'preview') {
+        const item = update.jevActivity
+        setJevByChat(current => ({ ...current, [id]: { ...(current[id] ?? EMPTY_JEV_CHAT), items: mergeActivity(current[id]?.items ?? [], [item]) } }))
+      }
       if (update.lifecycle) {
         if (update.lifecycle === 'restored') { excludedChats.current.delete(id); activityRevision.current++; setArchivedRefresh(value => value + 1); void reconcile() }
         else {
@@ -854,10 +880,10 @@ export default function App() {
         setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id ? { ...chat, status: next.status, unread: next.unread, ...(update.turn?.kind === 'started' ? { updatedAtEpoch: Date.now(), updatedAt: 'Now' } : {}) } : chat) } : current)
       }
       if (update.conversationTitle) setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id ? { ...chat, title: update.conversationTitle! } : chat) } : current)
-    }, () => { void reconcile() }, setActivityConnected)
+    }, () => { void reconcile(); if (activeIdRef.current) void loadJev(activeIdRef.current) }, setActivityConnected)
     const timer = window.setInterval(() => { void reconcile() }, 10000)
     return () => { disposed = true; clearInterval(timer); disconnect() }
-  }, [ready])
+  }, [ready, loadJev])
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -1056,11 +1082,11 @@ export default function App() {
   }
   const newChat = () => showView('new')
   return <div className={`app-shell ${rightOpen && activeContextTool === 'browser' ? 'browser-open' : ''} ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
-    {!leftOpen && view !== 'chat' && view !== 'new' && view !== 'jev' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
-    {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
+    {!leftOpen && view !== 'chat' && view !== 'new' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
+    {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { if (tool === 'jev' && activeId) showView('chat'); setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={closeLeft} />
     <div className="content-area" inert={leftOpen && isNarrowLayout() ? true : undefined}>
-      {activeConversation && <ChatSurface visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
+      {activeConversation && <ChatSurface jevItems={jevByChat[activeConversation.id]?.items ?? []} onOpenJev={id => { setSelectedJevByChat(current => ({ ...current, [activeConversation.id]: id })); setActiveContextTool('jev'); openRight() }} visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
       {view === 'chat' && !activeConversation && <main className="chat-surface"><header className="chat-header"><IconButton label="Expand conversations" onClick={openLeft}><Menu size={20} /></IconButton><span>Codex 2</span><ConnectionPill state={connection} /></header><section className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>Start a conversation in your local workspace.</p><button className="button primary start-chat" onClick={newChat}><Edit3 size={17} />New chat</button></section></main>}
       <LaunchPad visible={view === 'new' || view === 'projects'} projectMode={view === 'projects'} selectedProjectId={data.projects.some(project => project.id === launchProjectId) ? launchProjectId : data.projects[0]?.id} projectControls={view === 'projects' ? <ProjectsPage onDelete={project => askDelete({ project })} createRequest={projectCreationRequest} projects={data.projects} conversations={data.conversations} selectedId={launchProjectId || data.projects[0]?.id || ''} onSelect={setLaunchProjectId} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} /> : undefined} onSent={(id, model, effort) => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id ? { ...chat, lastTurnModel: model, lastTurnEffort: effort, model } : chat) } : current)} chats={data.conversations} projects={data.projects} onMenu={openLeft} leftOpen={leftOpen} onSelect={selectConversation} onCreated={chat => { activityRevision.current++; preparing.current.add(chat.id); setData(current => current ? { ...current, conversations: [chat, ...current.conversations.filter(item => item.id !== chat.id)] } : current) }} onPrepared={id => { activityRevision.current++; preparing.current.delete(id) }} onFailed={id => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id && chat.status === 'running' ? { ...chat, status: 'failed' } : chat) } : current)} />
       {view === 'new' && !activityConnected && <p className="launch-connection" role="status">Activity connection is reconnecting. Status may be delayed.</p>}
@@ -1068,13 +1094,9 @@ export default function App() {
       {view === 'images' && <ImagesPage data={data} onChange={changeImages} onSelect={selectConversation} currentConversation={activeConversation} currentEvents={events} />}
       {view === 'archived' && <ArchivedChats refresh={archivedRefresh} projects={data.projects} onRestore={restoreChat} onDelete={chat => askDelete({ chat })} onOpen={selectConversation} />}
       {view === 'settings' && <SettingsPage data={data} connection={connection} />}
-      {view === 'jev' && <JevActivityPage chats={data.conversations} leftOpen={leftOpen} onMenu={openLeft} onOpen={async id => {
-        const chat = data.conversations.find(item => item.id === id) ?? await loadActivityConversation(id)
-        setData(current => current && !current.conversations.some(item => item.id === id) ? { ...current, conversations: [chat, ...current.conversations] } : current)
-        selectConversation(chat)
-      }} />}
+
     </div>
-    {rightOpen && <ContextPanel browserSignal={browserSignal} files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={() => setRightOpen(false)} />}
+    {rightOpen && <ContextPanel jevState={jevByChat[activeId] ?? EMPTY_JEV_CHAT} selectedJev={selectedJevByChat[activeId]} onLoadJev={before => { void loadJev(activeId, before) }} browserSignal={browserSignal} files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={() => setRightOpen(false)} />}
     {deleteTarget && <Modal title={deleteTarget.chat ? 'Delete chat?' : 'Delete project?'} description={deleteTarget.chat ? `Permanently delete “${deleteTarget.chat.title}” and any chats it spawned. This cannot be undone.` : `Delete “${deleteTarget.project?.name}”? Its chats will be kept under No project. Workspace files will stay on disk.`} onClose={() => { if (!deleteBusy.current) setDeleteTarget(null) }}><div className="modal-form delete-confirmation">{deleteError && <p className="modal-error" role="alert">{deleteError}</p>}<footer><button type="button" autoFocus className="button" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="button destructive-button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? 'Deleting…' : deleteTarget.chat ? 'Delete chat' : 'Delete project'}</button></footer></div></Modal>}
     <div className="mobile-scrim right" onClick={() => setRightOpen(false)} />
   </div>

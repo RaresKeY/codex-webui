@@ -6,7 +6,7 @@ Codex WebUI 2 is a successor derived from WebUI 1 at `4b995df`, retaining its se
 
 Conversation rows stay title-only. `ConversationListItem.tsx` exposes the preview, project name, last-updated label and model through a hover summary and an independent details disclosure. The disclosure is available to keyboard and touch users without opening the conversation; missing project records fall back to the workspace directory name. The selection button also references the details as its accessible description.
 
-Text chat uses Auto Jev selection or an explicitly saved per-chat manual choice, followed by the native acknowledgement and exact-input barriers in `jev_routing.md`. Failed drafts remain editable. IME Enter does not submit during composition. Live/routing state blocks duplicate submit; changing conversation cancels pre-submission work. Projects, schedules, images and voice retain inherited behavior. Browser remains a planned context tool.
+Text chat uses Auto Jev selection or an explicitly saved per-chat manual choice, followed by the native acknowledgement and exact-input barriers in `jev_routing.md`. Failed drafts remain editable. IME Enter does not submit during composition. Live/routing state blocks duplicate submit; changing conversation cancels pre-submission work. Projects, schedules, images and voice retain inherited behavior. The experimental Browser context uses an audited companion. Jev process details live in a per-chat context sidebar linked from Auto turns.
 
 The sidebar follows the ChatGPT app hierarchy with compact New chat/Search chats/navigation rows, an expandable project list, quiet single-line chats and a fixed profile row. See `sidebar_navigation.md` for behavior, responsive focus contracts and evidence limits.
 

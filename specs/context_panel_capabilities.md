@@ -4,7 +4,7 @@
 
 The following describes inherited adapter behavior and original-project evidence. WebUI 2 keeps the bounded tool surfaces; see verification.md for checks actually run here.
 
-Implemented and verified for Outputs, read-only Terminal activity, Side chats, Explorer, and bounded workspace Changes. Browser remains an honest planned surface because the installed public App Server exposes no browser-control contract.
+Implemented and verified for Outputs, read-only Terminal activity, Side chats, Explorer, and bounded workspace Changes. The experimental branch adds Jev’s per-chat process and a separately audited browser companion; neither uses a private Desktop API.
 
 ## Source Sync
 
@@ -18,7 +18,7 @@ Changes to a tool's availability, backing, mutation authority, or Project-inheri
 
 ## Behavior
 
-The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts, remains available from the conversation-header control, and does not compete with the transcript until explicitly opened. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
+The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts and remains available from the conversation header. Jev opens explicitly from a turn step or navigation; agent Browser actions select and open Browser automatically. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
 
 | Tool | Current state | Backing and boundary |
 | --- | --- | --- |
@@ -27,7 +27,8 @@ The right side is one collapsible contextual panel with a registry-driven select
 | Side chats | Available, client adapter | Public `thread/list` bootstrap results, ranked by matching workspace and project metadata. Selecting one changes the primary conversation; it does not create an unsupported embedded agent. |
 | Explorer | Available, companion adapter | Existing canonical-root-contained workspace tree/read/write routes. It is not Codex Desktop's private Explorer. |
 | Changes | Available, companion adapter | Read-only, bounded `git status --porcelain=v1 -z` below the configured workspace. It reports added, modified, and deleted paths; it does not stage, commit, run hooks, or accept arbitrary arguments. |
-| Browser | Planned / not supported | The installed ClientRequest schema contains no browser tab, navigation, DOM, or screenshot method. Codex Desktop's in-app Browser is an app UI capability, not a public interface available to this standalone client. |
+| Browser | Experimental companion | Bounded typed Jev browser actions, live frames and cursor events; see `browser_integration.md`. |
+| Jev | Available, thread-scoped | Safe routing records and actual preparation events, linked from each Auto turn; see `jev_activity.md`. |
 
 The installed schema also contains powerful `thread/shellCommand`, `command/exec`, and `process/spawn` families. Their existence does not make an arbitrary Terminal safe for this localhost UI. The companion intentionally projects none of them. Codex-originated commands remain observable through Outputs and the thread-scoped background-terminal inventory.
 
@@ -49,7 +50,7 @@ Sources for the cloud distinction: [Projects in ChatGPT](https://help.openai.com
 - `backend/tests/test_workspace.py` plus the API's temporary Git-repository test cover canonical containment and actual porcelain parsing without a general command surface.
 - `frontend/src/api.test.ts` covers terminal/capability normalization; `frontend/src/context-tools.test.ts` enforces the registry states and related-chat ranking.
 - Live on 2026-08-15, the installed App Server returned the documented active-writer conflict for a Desktop-owned thread; the companion converted it to HTTP 200 with an actionable `unavailableReason`. The Changes adapter returned the checkout's real bounded status.
-- Desktop and 760-pixel browser checks exercise all selectors, panel collapse, and overlay behavior. Browser remains visibly planned; supported tools render backing-driven empty, limited, or populated states.
+- Desktop and 760-pixel browser checks exercise all selectors, panel collapse, and overlay behavior. Browser availability is runtime checked; supported tools render backing-driven empty, limited, or populated states.
 
 ## Experimental browser
 

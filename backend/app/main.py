@@ -421,7 +421,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def route_message(thread_id: str, body: RouteRequest) -> Any:
         if not codex.available:
             raise HTTPException(503, "Connect the local Codex service before routing a message.")
-        activity = JevActivity(db)
+        activity = JevActivity(db, codex._publish)
         await activity.begin(thread_id, "preview")
         status = "stopped"
         try:
@@ -437,6 +437,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/jev/activity")
     async def list_jev_activity(before: int | None = Query(None, ge=1), limit: int = Query(50, ge=1, le=100)) -> Any:
         return await activity_page(db, before, limit)
+
+    @app.get("/api/threads/{thread_id}/jev/activity")
+    async def list_chat_jev_activity(thread_id: str, before: int | None = Query(None, ge=1), limit: int = Query(50, ge=1, le=100)) -> Any:
+        return await activity_page(db, before, limit, thread_id)
 
     @app.get("/api/jev/activity/{activity_id}/turn")
     async def read_jev_turn(activity_id: int) -> Any:
@@ -644,7 +648,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             async with codex.subscribe() as queue:
                 while True:
                     message = await queue.get()
-                    if activity_only and message.get("method") not in {"turn/started", "turn/completed", "error", "thread/name/updated", "thread/archived", "thread/deleted", "thread/unarchived"}:
+                    if activity_only and message.get("method") not in {"webui/jevActivity", "turn/started", "turn/completed", "error", "thread/name/updated", "thread/archived", "thread/deleted", "thread/unarchived"}:
                         continue
                     if thread_id is None or event_is_for_thread(message, thread_id):
                         await websocket.send_json(message)

@@ -37,13 +37,14 @@ class JevFixtures(SidebarFixtures):
 
     def do_GET(self):
         path = urlsplit(self.path).path
-        if path == "/api/jev/activity":
+        if path.startswith("/api/threads/") and path.endswith("/jev/activity"):
             type(self).activity_reads += 1
             if self.fail_activity:
                 return self.reply({"detail": "Synthetic unavailable activity"}, 503)
             before = int(parse_qs(urlsplit(self.path).query).get("before", ["999"])[0])
-            items = [item for item in self.records if item["id"] < before]
-            return self.reply({"data": items[:4], "nextCursor": items[3]["id"] if len(items) > 4 else None})
+            thread_id = path.split("/")[3]
+            items = [item for item in self.records if item["id"] < before and item["thread_id"] == thread_id and item["source"] != "preview"]
+            return self.reply({"data": items[:3], "nextCursor": items[2]["id"] if len(items) > 3 else None})
         if path.startswith("/api/jev/activity/") and path.endswith("/turn"):
             return self.reply({"threadId": "c1", "turnId": "t0", "status": "completed"})
         return super().do_GET()
@@ -114,61 +115,65 @@ def main():
                     bidi.command('input.performActions', {'context':context,'actions':[{'type':'pointer','id':'finger','parameters':{'pointerType':'touch'},'actions':[{'type':'pointerMove','origin':'viewport',**point},{'type':'pointerDown','button':0},{'type':'pointerUp','button':0}]}]})
                 viewport(1440, 1000)
                 bidi.command('browsingContext.navigate', {'context':context,'url':url,'wait':'complete'})
-                wait("document.querySelector('.sidebar-nav button') !== null")
-                def open_jev():
-                    evaluate("(() => {Array.from(document.querySelectorAll('.sidebar-nav button')).find(b => b.textContent === 'Jev').click(); return true;})()")
-                    wait("document.querySelector('.jev-page') !== null && document.querySelectorAll('.jev-record').length === 4")
-                open_jev()
-                evaluate("(() => {document.querySelector('.jev-record summary').focus(); return true;})()")
-                key('\ue006')
-                wait("document.querySelector('.jev-record[open]') !== null")
+                wait("document.querySelector('.chat-title') !== null")
+                click('.chat-title')
+                wait("document.querySelector('.chat-surface:not([hidden]) .message.assistant') !== null && document.querySelector('.jev-turn-step') !== null")
+                assert not evaluate("Boolean(document.querySelector('.context-panel'))")
+                click('.jev-turn-step')
+                wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 3 && document.querySelector('.jev-record[open]') !== null")
                 assert evaluate("document.querySelectorAll('.jev-record[open] progress').length === 7")
                 assert evaluate("document.querySelector('.jev-preparation').textContent.includes('Up-to-date information') && document.querySelector('.jev-preparation').textContent.includes('Useful')")
                 assert evaluate("document.querySelector('.jev-record[open]').textContent.includes('1,200')")
+                assert evaluate("document.querySelectorAll('.jev-record[open] .jev-process-flow li[data-state=complete]').length === 3")
                 click('.jev-record[open] footer button')
                 wait("document.querySelector('.jev-turn-status')?.textContent.includes('Completed')")
+                screenshot('desktop.png')
                 click('.jev-more')
-                wait("document.querySelectorAll('.jev-record').length === 5 && !document.querySelector('.jev-more')")
-                JevFixtures.records[3]['status'] = 'stopped'
+                wait("document.querySelectorAll('.jev-record').length === 4 && !document.querySelector('.jev-more')")
+                reads = JevFixtures.activity_reads
+                time.sleep(6)
+                assert JevFixtures.activity_reads == reads, 'Jev history must not poll'
+                changed = {**JevFixtures.records[3], 'status':'stopped', 'updated_at':'2026-10-06T12:00:02Z'}
+                JevFixtures.records[3] = changed
+                JevFixtures.emit({'method':'webui/jevActivity','params':{'threadId':'c1','activity':changed}})
                 wait("document.querySelectorAll('.jev-status.stopped').length === 2")
-                assert evaluate("document.querySelectorAll('.jev-record').length === 5")
-                screenshot('desktop-details.png')
-                for width,height,name in [(390,844,'phone'),(320,640,'narrow-phone')]:
+                assert evaluate("document.querySelectorAll('.jev-record').length === 4")
+                assert JevFixtures.activity_reads == reads, 'Stage events must not refetch history'
+                other = {**changed, 'id':99, 'thread_id':'chat-1', 'decision':{'model':'gpt-6-luna','effort':'low'}}
+                JevFixtures.emit({'method':'webui/jevActivity','params':{'threadId':'chat-1','activity':other}})
+                time.sleep(.2)
+                assert evaluate("document.querySelectorAll('.jev-record').length === 4"), 'Another chat leaked into this sidebar'
+                for width,height in [(390,844),(320,640)]:
                     viewport(width,height)
-                    if evaluate("Boolean(document.querySelector('.chat-sidebar'))"):
-                        click('[aria-label="Close conversations"]')
-                        wait("!document.querySelector('.chat-sidebar')")
+                    wait("!document.querySelector('.context-panel')")
+                    click('[aria-label="Open context panel"]')
+                    wait("document.querySelector('.jev-context') !== null")
+                    assert not evaluate("Boolean(document.querySelector('.chat-sidebar'))")
                     assert not evaluate("document.documentElement.scrollWidth > innerWidth")
-                    screenshot(name+'-details.png')
-                    click('[aria-label="Expand conversations"]')
-                    wait("document.querySelector('.chat-sidebar') !== null")
-                    assert evaluate("document.querySelector('.content-area').inert")
-                    point = evaluate("(() => {const b=Array.from(document.querySelectorAll('.sidebar-nav button')).find(b=>b.textContent==='Jev'); const r=b.getBoundingClientRect(); return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()")
-                    bidi.command('input.performActions', {'context':context,'actions':[{'type':'pointer','id':'finger','parameters':{'pointerType':'touch'},'actions':[{'type':'pointerMove','origin':'viewport',**point},{'type':'pointerDown','button':0},{'type':'pointerUp','button':0}]}]})
-                    wait("!document.querySelector('.chat-sidebar')")
-                click('.jev-record[open] footer button:last-child')
-                wait("document.querySelector('.chat-surface:not([hidden])') !== null && document.querySelector('.message.assistant') !== null")
+                    assert evaluate("(() => {const r=document.querySelector('.context-panel').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth})()")
+                    screenshot(f'phone-{width}.png')
+                    click('[aria-label="Close context panel"]')
                 viewport(1440,1000)
                 if not evaluate("Boolean(document.querySelector('.chat-sidebar'))"):
                     click('[aria-label="Expand conversations"]')
-                JevFixtures.records = []
-                open_jev_empty = "(() => {Array.from(document.querySelectorAll('.sidebar-nav button')).find(b=>b.textContent==='Jev').click(); return true;})()"
-                evaluate(open_jev_empty)
-                wait("document.querySelector('.jev-empty')?.textContent.includes('No routing activity yet')")
-                screenshot('empty.png')
+                evaluate("(() => {Array.from(document.querySelectorAll('.chat-title')).find(button=>button.textContent.includes('Conversation 1 —')).click();return true;})()")
+                wait("document.querySelector('.chat-heading').textContent.includes('Conversation 1 —')")
+                evaluate("(() => {Array.from(document.querySelectorAll('.sidebar-nav button')).find(b=>b.textContent==='Jev').click();return true;})()")
+                wait("document.querySelector('.jev-context') !== null && document.querySelectorAll('.jev-record').length === 1")
+                assert not evaluate("document.querySelector('.jev-context').textContent.includes('1,200')"), 'Other chat details leaked'
                 JevFixtures.fail_activity = True
-                click('.jev-page .page-header .button')
-                wait("document.querySelector('.jev-page [role=alert]') !== null")
+                click('[aria-label="Reload Jev history"]')
+                wait("document.querySelector('.jev-context [role=alert]') !== null")
                 screenshot('error.png')
                 JevFixtures.fail_activity = False
-                click('.jev-page .page-header .button')
-                wait("!document.querySelector('.jev-page [role=alert]')")
+                click('[aria-label="Reload Jev history"]')
+                wait("!document.querySelector('.jev-context [role=alert]')")
                 errors = [event for event in bidi.events if event.get('method')=='log.entryAdded' and event.get('params',{}).get('type')=='javascript' and event.get('params',{}).get('level')=='error']
                 assert not errors, f'{len(errors)} uncaught JavaScript errors'
                 assert JevFixtures.calls == [], JevFixtures.calls
-                result = {'syntheticFixtures': True, 'viewports': ['1440x1000','390x844','320x640'], 'checks': ['sidebar navigation','keyboard details','probabilities and usage','native actual turn status','older pagination','live update preserves older pages','phone drawer and touch','no horizontal overflow','open source chat','empty state','read failure and refresh'], 'uncaughtJavaScriptErrors': len(errors), 'modelCalls': 0}
+                result = {'syntheticFixtures':True,'viewports':['1440x1000','390x844','320x640'],'checks':['turn-linked sidebar','process stages','probabilities and usage','native status','pagination','no five-second polling','event updates preserve older runs','chat isolation','phone fit','read failure and reload'],'uncaughtJavaScriptErrors':len(errors),'modelCalls':0}
                 (output/'checks.json').write_text(json.dumps(result,indent=2)+'\n')
-                print('Jev browser checks passed at desktop and phone widths; no model calls.')
+                print('Jev checks passed: turn-linked sidebar, event updates without polling, chat isolation, desktop/phone; no model calls.')
 
             finally:
                 server.stopping = True

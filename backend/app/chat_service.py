@@ -130,7 +130,7 @@ class RoutedChat:
 
         async with self.reserve(thread_id):
             stage = "routing"
-            activity = JevActivity(self.db)
+            activity = JevActivity(self.db, self.codex._publish)
             activity_status = "stopped"
             try:
                 await check_cancelled()

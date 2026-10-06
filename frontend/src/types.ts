@@ -1,4 +1,4 @@
-export type View = 'new' | 'chat' | 'archived' | 'projects' | 'schedules' | 'images' | 'jev' | 'settings'
+export type View = 'new' | 'chat' | 'archived' | 'projects' | 'schedules' | 'images' | 'settings'
 export type ConnectionState = 'connecting' | 'online' | 'demo' | 'offline'
 export type EventKind = 'message' | 'image' | 'reasoning' | 'command' | 'file' | 'approval' | 'status'
 export type VoiceState = 'idle' | 'connecting' | 'live' | 'stopping' | 'error' | 'unsupported'
@@ -166,6 +166,7 @@ export interface BootstrapPayload {
 }
 
 export interface LiveUpdate {
+  jevActivity?: import('./jev-activity').JevActivity
   browser?: import('./BrowserContext').BrowserSignal
   lifecycle?: 'archived' | 'deleted' | 'restored'
   selectedModel?: string

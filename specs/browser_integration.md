@@ -34,7 +34,7 @@ Deployments must start the host bridge before starting the container. Browser dy
 
 ## Verification
 
-The implementation pass passed 58 backend tests and 43 frontend tests, production build, TypeScript and lint checks, plus the smoke and visual checks below.
+The original implementation pass passed 58 backend tests and 43 frontend tests. The local-work integration is verified separately in `verification.md`, with the retained theme, launch flow and Jev process.
 
 - Backend tests cover URL rejection, schema validation, disabled runtime, cross-site writes, thread isolation, stale observations, polling stability, pointer ordering, supported-version registration and nonblocking dynamic-tool dispatch.
 - `tools/smoke_browser.py --run` launches the audited Flatpak against a synthetic loopback fixture through the test-only allowlist browser; it uses a temporary isolated profile/lock, removes its profile after closing, and checks real screenshot, click/type, cursor events and password omission without external sites or inference.

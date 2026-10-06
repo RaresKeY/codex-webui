@@ -107,3 +107,46 @@ def test_invalid_pagination_and_missing_turn_are_safe(client):
     assert client.get("/api/jev/activity?limit=101").status_code == 422
     assert client.get("/api/jev/activity?before=0").status_code == 422
     assert client.get("/api/jev/activity/1/turn").status_code == 404
+
+
+def test_jev_stage_events_are_thread_scoped_safe_and_ordered(client, monkeypatch):
+    configure(client, monkeypatch)
+    publish = AsyncMock()
+    monkeypatch.setattr(client.app.state.codex, '_publish', publish)
+    assert client.post('/api/threads/chat/messages', json={'input': 'private ask'}).status_code == 201
+    events = [call.args[0] for call in publish.await_args_list if call.args[0]['method'] == 'webui/jevActivity']
+    assert [event['params']['activity']['stage'] for event in events] == ['routing', 'routing', 'switching', 'sending', 'sending']
+    assert all(event['params']['threadId'] == 'chat' for event in events)
+    assert events[0]['params']['activity']['decision'] is None
+    assert events[-1]['params']['activity']['turn_id'] == 'actual-turn'
+    assert events[-1]['params']['activity']['status'] == 'submitted'
+    assert 'private' not in json.dumps(events) and 'secret' not in json.dumps(events)
+    assert client.get('/api/threads/other/jev/activity').json() == {'data': [], 'nextCursor': None}
+    assert client.get('/api/threads/chat/jev/activity').json()['data'][0]['id'] == events[0]['params']['activity']['id']
+    assert client.post('/api/threads/chat/route', json={'input': 'preview ask'}).status_code == 200
+    assert len(client.get('/api/threads/chat/jev/activity').json()['data']) == 1
+
+
+def test_stopped_jev_attempt_emits_final_state_without_inventing_turn(client, monkeypatch):
+    configure(client, monkeypatch, 'ack')
+    publish = AsyncMock()
+    monkeypatch.setattr(client.app.state.codex, '_publish', publish)
+    assert client.post('/api/threads/chat/messages', json={'input': 'private ask'}).status_code == 502
+    last = publish.await_args_list[-1].args[0]['params']['activity']
+    assert (last['status'], last['stage'], last['turn_id']) == ('stopped', 'switching', None)
+    assert client.get('/api/threads/chat/jev/activity?limit=101').status_code == 422
+
+
+def test_activity_socket_delivers_jev_events_without_transcript_deltas(client):
+    import time
+    event = {'method': 'webui/jevActivity', 'params': {'threadId': 'chat', 'activity': {'id': 1}}}
+    with client.websocket_connect('/api/activity') as socket:
+        assert socket.receive_json()['method'] == 'webui/status'
+        for _ in range(100):
+            if client.app.state.codex._subscribers:
+                break
+            time.sleep(.01)
+        assert client.app.state.codex._subscribers
+        client.portal.call(client.app.state.codex._publish, {'method': 'item/agentMessage/delta', 'params': {'threadId': 'chat', 'delta': 'private'}})
+        client.portal.call(client.app.state.codex._publish, event)
+        assert socket.receive_json() == event

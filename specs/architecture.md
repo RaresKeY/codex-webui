@@ -12,6 +12,10 @@ Bootstrap serves local shell data without native RPCs; history/models/usage hydr
 
 The experimental Browser context connects through `browser_service.py`; a container may use the typed Unix-socket client in `browser_bridge.py` to a separately owned host Flatpak companion. UI/persistence retain the existing narrow Codex adapter. See [browser_integration.md](browser_integration.md).
 
+## Jev process events
+
+The existing activity socket carries `webui/jevActivity` metadata from the server-owned routed send. Per-chat caches and native turn links project the process into `JevContext.tsx` and the transcript without a second transcript store or periodic Jev polling.
+
 ## Gaps
 
 - Reconnect still hydrates authoritative history rather than replaying missed events.

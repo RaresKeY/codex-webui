@@ -40,8 +40,9 @@ def safe_decision(decision: dict[str, Any]) -> dict[str, Any]:
 
 
 class JevActivity:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, publish=None):
         self.db = db
+        self.publish = publish
         self.id: int | None = None
         self.started = time.monotonic()
 
@@ -53,6 +54,7 @@ class JevActivity:
                 "INSERT INTO jev_activity(thread_id,source,status,stage,started_at,updated_at) VALUES(?,?,'pending','routing',?,?)",
                 (thread_id, source, now, now),
             )
+            await self.emit()
         except sqlite3.Error:
             pass  # Observability cannot turn a successful send into a retry.
 
@@ -66,14 +68,28 @@ class JevActivity:
                 (status, stage, utc_now(), round((time.monotonic() - self.started) * 1000),
                  json.dumps(safe_decision(decision)) if decision is not None else None, turn_id, self.id),
             )
+            await self.emit()
         except sqlite3.Error:
             pass
 
 
-async def activity_page(db: Database, before: int | None, limit: int) -> dict[str, Any]:
+    async def emit(self) -> None:
+        if self.publish is None or self.id is None:
+            return
+        row = await self.db.fetchone("SELECT * FROM jev_activity WHERE id=?", (self.id,))
+        if row:
+            raw = row.pop("decision_json")
+            row["decision"] = json.loads(raw) if raw else None
+            try:
+                await self.publish({"method": "webui/jevActivity", "params": {"threadId": row["thread_id"], "activity": row}})
+            except Exception:
+                pass  # Optional telemetry must never fail an acknowledged submission.
+
+
+async def activity_page(db: Database, before: int | None, limit: int, thread_id: str | None = None) -> dict[str, Any]:
     rows = await db.fetchall(
-        "SELECT * FROM jev_activity WHERE (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
-        (before, before, limit + 1),
+        "SELECT * FROM jev_activity WHERE (? IS NULL OR id < ?) AND (? IS NULL OR (thread_id=? AND source!='preview')) ORDER BY id DESC LIMIT ?",
+        (before, before, thread_id, thread_id, limit + 1),
     )
     items = rows[:limit]
     for row in items:

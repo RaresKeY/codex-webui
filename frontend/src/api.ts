@@ -3,6 +3,7 @@ import { contentImages, imageSource } from './images'
 import { contextUsage } from './context-usage'
 import { UNTITLED_CONVERSATION } from './conversation-title'
 import type { RealtimeVoice, RealtimeVoicesList, WebRtcRealtimeVersion } from './app-server-protocol'
+import { validActivity } from './jev-activity'
 import type { JevActivityPage, JevTurn, JevDecision } from './jev-activity'
 import type { BackgroundTerminals, BootstrapPayload, ConnectionState, Conversation, ConversationSnapshot, FileReadResult, ImageAsset, LiveUpdate, Mention, PermissionMode, Plugin, Project, RealtimeCapability, Schedule, StreamEvent, TurnLifecycle, Usage, WorkspaceChanges, WorkspaceFile } from './types'
 
@@ -334,6 +335,7 @@ function eventsFromThread(raw: unknown): StreamEvent[] {
     const record = object(turn)
     return array(record.items ?? record.events ?? record.messages).map((item, itemIndex) => {
       const event = normalizeItem(item, turnIndex * 1000 + itemIndex)
+      if (event && text(record.id)) event.meta = { ...event.meta, turnId: text(record.id) }
       const selection = object(record.webui)
       if (event && event.role === 'assistant' && text(selection.model)) event.meta = { ...event.meta, model: text(selection.model), ...(text(selection.effort) ? { effort: text(selection.effort) } : {}) }
       return event
@@ -387,6 +389,15 @@ function pendingApprovals(raw: unknown, conversationId: string): StreamEvent[] {
 }
 
 export function notificationUpdate(raw: unknown, realtimeTranscriptId?: string): LiveUpdate | null {
+  const root = object(raw), params = object(root.params)
+  if (root.method === 'webui/jevActivity') return validActivity(params.activity) && params.activity.thread_id === params.threadId ? { jevActivity: params.activity } : null
+  const update = nativeNotificationUpdate(raw, realtimeTranscriptId)
+  const turnId = text(params.turnId ?? object(params.turn).id)
+  if (update?.event && turnId) update.event.meta = { ...update.event.meta, turnId }
+  return update
+}
+
+function nativeNotificationUpdate(raw: unknown, realtimeTranscriptId?: string): LiveUpdate | null {
   const envelope = object(raw)
   const method = text(envelope.method)
   const params = object(envelope.params)
@@ -557,13 +568,10 @@ export interface RoutingDecision {
 }
 export type RoutingStage = 'routing' | 'switching' | 'sending'
 
-export async function loadJevActivity(before?: number, signal?: AbortSignal): Promise<JevActivityPage> {
-  const result = await request<JevActivityPage>(`/jev/activity${before ? `?before=${before}` : ''}`, { signal })
-  if (!Array.isArray(result.data) || result.data.some(item => !Number.isSafeInteger(item.id) || item.id < 1 || typeof item.thread_id !== 'string'
-    || !['auto', 'manual', 'preview'].includes(item.source) || !['pending', 'submitted', 'classified', 'stopped', 'interrupted'].includes(item.status)
-    || !['routing', 'switching', 'sending'].includes(item.stage)) || (result.nextCursor !== null && (!Number.isSafeInteger(result.nextCursor) || result.nextCursor < 1))) {
-    throw new Error('Jev activity could not be read.')
-  }
+export async function loadJevActivity(threadId: string, before?: number, signal?: AbortSignal): Promise<JevActivityPage> {
+  const result = await request<JevActivityPage>(`/threads/${encodeURIComponent(threadId)}/jev/activity${before ? `?before=${before}` : ''}`, { signal })
+  if (!Array.isArray(result.data) || result.data.some(item => !validActivity(item) || item.thread_id !== threadId || item.source === 'preview')
+    || (result.nextCursor !== null && (!Number.isSafeInteger(result.nextCursor) || result.nextCursor < 1))) throw new Error('Jev activity could not be read.')
   return result
 }
 

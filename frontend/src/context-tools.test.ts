@@ -5,6 +5,7 @@ import type { Conversation } from './types'
 describe('context tool registry', () => {
   it('keeps a stable, scalable tool order around the primary conversation', () => {
     expect(CONTEXT_TOOLS.map(tool => tool.id)).toEqual([
+      'jev',
       'outputs',
       'browser',
       'terminal',
@@ -17,6 +18,7 @@ describe('context tool registry', () => {
   it('defaults to Explorer with the experimental browser adapter', () => {
     expect(DEFAULT_CONTEXT_TOOL).toBe('explorer')
     expect(CONTEXT_TOOLS.filter(tool => tool.availability === 'available').map(tool => tool.id)).toEqual([
+      'jev',
       'outputs',
       'browser',
       'terminal',

@@ -57,6 +57,12 @@ Gallery/sidebar pass: 75 frontend tests, 142 backend tests, native offline lifec
 
 The experimental browser adds adapter/schema, stale-observation, event-scoping and bridge cancellation tests. `tools/smoke_browser.py --run` verifies real audited Flatpak interaction against an isolated synthetic fixture without paid inference. Desktop/narrow-width production checks use synthetic fixtures. Prior browser implementation evidence is recorded in [browser_integration.md](browser_integration.md); paid model execution is not required for a rebase/deployment check.
 
+## Local-work browser and per-chat Jev integration
+
+The experimental branch is based on the preserved local WebUI theme, launch, alignment, V7 routing and Jev activity work. Browser changes are imported locally; no upstream refresh forms this pass’s base. `tools/validate.sh` passed 192 backend and 97 frontend tests, TypeScript, lint and production build. Per-chat Jev tests verify safe stage events before execution, stopped attempts without fabricated turn IDs, thread-filtered history, socket delivery without transcript deltas, history/event merge ordering and linked transcript placement. No paid inference was run.
+
+`tools/check_jev_browser.py` checks the built UI at 1440×1000, 390×844 and 320×640: clicking a turn’s Jev step opens its run, stage flow/details, native-status read, older pagination, no five-second read while idle, direct event updates without refetch, chat isolation, error/reload and narrow fit. `tools/check_browser.py` checks the retained main chat UI at desktop/phone widths and exact-input submission with synthetic transport. Browser cursor and reduced-motion checks use an isolated real Chromium page. AMD64 image/runtime and native offline lifecycle are the deployment checks; ARM64 and paid end-to-end inference remain unverified.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.
