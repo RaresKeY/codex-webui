@@ -20,7 +20,7 @@
 | [architecture.md](architecture.md) | Python companion + container | Components, boundaries, flow and source ownership |
 | [codex_app_server.md](codex_app_server.md) | Protocol subset + Jev ordering | Host Codex adapter, resumable sessions, approvals, and realtime |
 | [persistence_model.md](persistence_model.md) | Organization + turn selections | Records, identifiers, per-turn model/effort, migrations and retention |
-| [workspace_files.md](workspace_files.md) | Inherited subset | Workspace roots, browser and file safety |
+| [workspace_files.md](workspace_files.md) | Implemented bounded subset | File links, editable numbered sidebar view, tree and workspace safety |
 | [context_panel_capabilities.md](context_panel_capabilities.md) | Implemented bounded subset | Context tools, backing boundaries, and Desktop/ChatGPT Project distinction |
 | [usage_observability.md](usage_observability.md) | Partial MVP | Context/usage display, logs and health |
 | [scheduling.md](scheduling.md) | Inherited subset | Scheduled-task lifecycle |

@@ -1,0 +1,39 @@
+.workspace-file-view { container-type: inline-size; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.workspace-file-tabs { height: 44px; flex-shrink: 0; display: flex; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.workspace-file-tab { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 290px; padding: 0 4px 0 10px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-hover); color: var(--text); }
+.workspace-file-tab > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.workspace-file-tab .icon-button { width: 26px; height: 26px; }
+.workspace-file-layout { display: grid; grid-template-columns: minmax(0, 1fr) 170px; flex: 1; min-height: 0; }
+.workspace-file-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.workspace-breadcrumbs { display: flex; align-items: center; gap: 5px; padding: 12px 14px; overflow-x: auto; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+.workspace-breadcrumbs span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.workspace-breadcrumbs span:last-child { color: var(--text); }
+.workspace-numbered-editor { display: flex; flex: 1; min-height: 0; padding-bottom: 10px; }
+.workspace-line-numbers, .workspace-numbered-editor textarea { font: 12px/22px var(--font-mono, monospace); tab-size: 4; padding-top: 4px; padding-bottom: 24px; }
+.workspace-line-numbers { width: 42px; flex-shrink: 0; text-align: right; padding: 0; color: var(--muted); overflow: hidden; user-select: none; }
+.workspace-numbered-editor textarea { flex: 1; min-width: 0; resize: none; border: 0; border-radius: 0; background: transparent; color: var(--text); padding-left: 4px; padding-right: 12px; outline-offset: -2px; white-space: pre; }
+.workspace-file-tree { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-left: 1px solid var(--line); padding: 6px; gap: 8px; }
+.workspace-file-actions { display: flex; align-items: center; gap: 3px; }
+.workspace-file-actions .icon-button { width: 28px; height: 30px; }
+.workspace-file-actions .button { padding: 5px 7px; gap: 5px; font-size: 12px; min-height: 30px; }
+.workspace-tree-root, .workspace-file-filter { display: flex; align-items: center; gap: 6px; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 6px; font-size: 12px; }
+.workspace-tree-root span { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.workspace-file-filter input { min-width: 0; width: 100%; border: 0; background: transparent; color: var(--text); outline-offset: 3px; font-size: 12px; }
+.workspace-file-tree-scroll { overflow: auto; min-height: 0; flex: 1; }
+.workspace-tree-children { padding-left: 12px; }
+.workspace-tree-entry .tree-row { padding: 5px 3px; height: 30px; font-size: 12px; }
+.workspace-file-error { padding: 6px 10px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.workspace-file-tree .workspace-file-error { padding: 0; }
+.app-shell.file-open { --context-width: min(clamp(560px, 54vw, 1000px), calc(100vw - var(--sidebar-width) - 360px)); }
+.app-shell.left-closed.file-open { --context-width: min(clamp(560px, 54vw, 1000px), calc(100vw - 360px)); }
+@media (max-width: 1000px) { .app-shell.file-open, .app-shell.left-closed.file-open { --context-width: min(760px, 100vw); } }
+@media (max-width: 540px) { .workspace-file-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 1fr) 210px; } .workspace-file-tree { border-left: 0; border-top: 1px solid var(--line); } .workspace-file-actions .icon-button { width: 40px; height: 40px; } .workspace-tree-entry .tree-row { min-height: 40px; } }
+
+@media (max-width: 1000px) { .file-open .context-panel { width: min(var(--context-user-width, 760px), 100vw); } }
+
+.workspace-numbered-editor textarea:focus-visible { outline: 1px solid var(--line-focus-soft); }
+
+@container (max-width: 540px) { .workspace-file-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 1fr) 210px; } .workspace-file-tree { border-left: 0; border-top: 1px solid var(--line); } }
+
+.workspace-line-number-track { position: relative; }
+.workspace-line-number { position: absolute; left: 0; right: 12px; height: 22px; }

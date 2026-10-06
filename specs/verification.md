@@ -93,6 +93,8 @@ The current review removes all inline Jev process controls, adds a pointer/keybo
 
 `WorkActivity.tsx` and `work-activity.css` replace duplicated activity markup and historical style overrides. `tools/check_turn_browser.py` verifies row height, child indentation, label-adjacent arrows and scroll-bottom text clearance at desktop/390px/320px alongside existing turn/summary/branch checks. Core chat checks also pass. Evidence is in `evidence/ui/work-activity/`; the focused ownership and behavior contract is `work_activity.md`.
 
+- Editable file-link sidebar checks passed at desktop 1440×1000 and phone 390×844 / 320×640: canonical tree/link draft identity, numbered editor, breadcrumbs/tree, visible read/save failures, duplicate-save prevention, successful save, retained drafts, bounded scrolling gutter and selected-tab visibility. Final backend 200 and frontend 109 tests passed; see `evidence/ui/file-view/review.md` and `tools/check_workspace_browser.py`.
+
 ## Gaps
 
 - Paid text routing/execution, real skill/plugin/app execution, microphone audio and ARM64 runtime are unverified.

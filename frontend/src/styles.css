@@ -256,7 +256,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .context-panel-header > div:last-child { display: flex; }
 .context-tool-tabs { display: flex; min-width: 0; overflow-x: auto; padding: 4px 8px; gap: 2px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
 .context-tool-tabs::-webkit-scrollbar { display: none; }
-.context-tool-tabs button { min-width: 43px; flex: 1 0 43px; position: relative; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--subtle); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 3px 2px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.context-tool-tabs button { min-width: max-content; flex: 1 0 56px; position: relative; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--subtle); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 3px 6px; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .context-tool-tabs button:hover { background: var(--panel-hover); color: var(--text); }
 .context-tool-tabs button.active { border-color: transparent; background: var(--surface-selected); color: var(--text); }
 .context-tool-tabs button i { position: absolute; top: 2px; right: 3px; min-width: 13px; border-radius: 7px; padding: 1px 3px; background: var(--panel-raised); color: var(--muted); font-size: 6px; font-style: normal; }

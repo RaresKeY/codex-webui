@@ -540,7 +540,10 @@ export async function loadMentionFiles(cwd: string, query: string, signal?: Abor
 }
 
 export async function loadFile(path: string, demoMode = false): Promise<FileReadResult> {
-  try { return { content: (await request<{ content: string }>(`/workspace/file?path=${encodeURIComponent(path)}`)).content } }
+  try {
+    const result = await request<{ content: string; path?: string }>(`/workspace/file?path=${encodeURIComponent(path)}`)
+    return { content: result.content, path: result.path }
+  }
   catch (error) {
     if (demoMode) return { content: demoFileContents[path] ?? `// ${path}\n// Demo preview while the local service is offline.\n`, demo: true }
     return { content: '', error: error instanceof Error ? error.message : 'File preview unavailable' }

@@ -27,6 +27,8 @@ import { groupTurnFeed, responseBranchPoints, workLabel } from './chat-resources
 import { ChatSummary } from './ChatSummary'
 import { BrowserContext, type BrowserSignal } from './BrowserContext'
 import { MarkdownContent } from './MarkdownContent'
+import { WorkspaceLinkContext } from './workspace-link-context'
+import { WorkspaceFileView, type FileDrafts, type FileOpenRequest } from './WorkspaceFileView'
 import type { ChatExecution } from './api'
 import { Composer } from './Composer'
 import { InlineImages } from './InlineImages'
@@ -363,7 +365,7 @@ function ChatSurface({ onBranch, onOutputs, contextOpen, visible, conversation, 
         <div><StatusDot status={conversation.status} /><h2 className="conversation-title" onDoubleClick={openRename} title="Double-click to rename">{conversation.title}</h2><button type="button" className="rename-trigger" onClick={openRename} aria-label="Rename conversation" title="Rename conversation"><Edit3 size={12} /></button></div>
         <span><FolderGit2 size={12} />{project?.name ?? 'No project'} · {conversation.cwd}</span>{renameError && !renaming && <small className="chat-name-error" role="alert">{renameError}</small>}
       </div>
-      <div className="chat-header-actions"><span className="chat-model-select" title={headerSelection ? `Model: ${headerSelection.model} · Reasoning effort: ${headerSelection.effort}. Change the chat selection with the speed control in the composer.` : 'Jev chooses model and effort for each message; change the chat selection with the speed control in the composer.'}><Sparkles size={14} /><span>{executionChoice && executionChoice.model !== 'auto' ? 'Manual' : 'Auto'}</span><strong>{headerSelection ? headerSelection.model.replace('gpt-', '') : 'Jev'}</strong>{headerSelection && <small className="chat-model-effort">· {headerSelection.effort}</small>}</span><label className="chat-project-select" title="Assign project"><FolderGit2 size={14} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project"><option value="">No project</option>{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label><ConnectionPill state={connection} /><button type="button" ref={summaryToggle} className={`icon-button summary-toggle ${summaryOpen ? 'active' : ''}`} aria-label="Sources and outputs" aria-expanded={summaryOpen && !contextOpen} aria-controls="chat-summary" hidden={contextOpen} onClick={() => setSummaryOpen(value => !value)}><SlidersHorizontal size={18} /></button><button type="button" className="icon-button context-panel-toggle" hidden={contextOpen} aria-label="Open context panel" aria-expanded={contextOpen} aria-controls="context-pane" onClick={openRight}><PanelRightOpen size={18} /></button></div>
+      <div className="chat-header-actions"><span className="chat-model-select" title={headerSelection ? `Model: ${headerSelection.model} · Reasoning effort: ${headerSelection.effort}. Change the chat selection with the speed control in the composer.` : 'Jev chooses model and effort for each message; change the chat selection with the speed control in the composer.'}><Sparkles size={14} /><span>{executionChoice && executionChoice.model !== 'auto' ? 'Manual' : 'Auto'}</span><strong>{headerSelection ? headerSelection.model.replace('gpt-', '') : 'Jev'}</strong>{headerSelection && <small className="chat-model-effort">· {headerSelection.effort}</small>}</span><label className="chat-project-select" title="Assign project"><FolderGit2 size={14} /><select value={conversation.projectId} onChange={event => onAssignProject(event.target.value)} aria-label="Assign conversation to project"><option value="">No project</option>{projects.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label><ConnectionPill state={connection} /><button type="button" ref={summaryToggle} className={`icon-button summary-toggle ${summaryOpen ? 'active' : ''}`} aria-label="Sources and outputs" title="Sources and outputs" aria-expanded={summaryOpen && !contextOpen} aria-controls="chat-summary" hidden={contextOpen} onClick={() => setSummaryOpen(value => !value)}><SlidersHorizontal size={18} /></button><button type="button" className="icon-button context-panel-toggle" hidden={contextOpen} aria-label="Open context panel" title="Open context panel" aria-expanded={contextOpen} aria-controls="context-pane" onClick={openRight}><PanelRightOpen size={18} /></button></div>
     </header>
     <section className="event-feed" aria-label="Conversation events" ref={feedRef} onScroll={() => { const feed = feedRef.current; if (feed) stickToBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120 }}>
       {events.length === 0 && <div className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>A clear space to think, create, and get things done.</p><div className="welcome-hints"><span><Code2 size={16} />Build something</span><span><Search size={16} />Explore a project</span><span><Sparkles size={16} />Refine an idea</span></div></div>}
@@ -486,9 +488,18 @@ function SideChatsContext({ conversations, current, onSelect }: { conversations:
   </section>
 }
 
-function ContextPanel({ files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal, jevState, onLoadJev }: { jevState: JevChatState; onLoadJev: (before?: number) => void; browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
+function ContextPanel({ fileRequest, fileDrafts, setFileDrafts, files, demo, events, conversations, currentConversation, activeTool, onToolChange, onSelectConversation, onClose, browserSignal, jevState, onLoadJev }: { fileRequest: FileOpenRequest | null; fileDrafts: FileDrafts; setFileDrafts: React.Dispatch<React.SetStateAction<FileDrafts>>; jevState: JevChatState; onLoadJev: (before?: number) => void; browserSignal: BrowserSignal | null; files: WorkspaceFile[]; demo: boolean; events: StreamEvent[]; conversations: Conversation[]; currentConversation?: Conversation; activeTool: ContextToolId; onToolChange: (tool: ContextToolId) => void; onSelectConversation: (conversation: Conversation) => void; onClose: () => void }) {
+  const toolTabs = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const tabs = toolTabs.current
+    if (!tabs) return
+    const reveal = () => { tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }
+    reveal()
+    const observer = new ResizeObserver(reveal)
+    observer.observe(tabs)
+    return () => observer.disconnect()
+  }, [activeTool])
   const [tree, setTree] = useState(files)
-  const [treeError, setTreeError] = useState('')
   const [selected, setSelected] = useState<WorkspaceFile | null>(null)
   const [content, setContent] = useState('')
   const [editing, setEditing] = useState(false)
@@ -530,24 +541,13 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
       return patch(current)
     })).catch(() => undefined)
   }
-  useEffect(() => {
-    if (demo || activeTool !== 'explorer') return
-    let disposed = false
-    void loadWorkspaceTree('.').then(items => { if (!disposed) { setTree(items); setTreeError('') } }).catch(() => { if (!disposed) setTreeError('Workspace files could not be loaded. Use Refresh to try again.') })
-    return () => { disposed = true }
-  }, [activeTool, demo])
-  const refreshTree = () => {
-    if (demo) { setTree(files); return }
-    void loadWorkspaceTree('.').then(items => { setTree(items); setTreeError('') }).catch(() => setTreeError('Workspace files could not be loaded. Use Refresh to try again.'))
-  }
   const activeDefinition = CONTEXT_TOOLS.find(tool => tool.id === activeTool) ?? CONTEXT_TOOLS[0]
-  const workspaceActive = activeTool === 'explorer' || activeTool === 'changes'
   const reportedChanges = demo ? modified : changes.files
   const ActiveIcon = contextToolIcons[activeTool]
   return <aside id="context-pane" className="context-panel" aria-label="Context panel" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
     <ContextResizeHandle />
-    <header className="context-panel-header"><div className="context-panel-title"><ActiveIcon size={17} /><h2>{activeDefinition.label}</h2></div><div>{workspaceActive && <IconButton label={activeTool === 'changes' ? 'Refresh workspace changes' : 'Refresh workspace'} onClick={activeTool === 'changes' ? refreshChanges : refreshTree}><RefreshCw size={15} className={activeTool === 'changes' && changesState === 'loading' ? 'spin' : ''} /></IconButton>}<IconButton label="Close context panel" onClick={onClose}><PanelRightClose size={18} /></IconButton></div></header>
-    <div className="context-tool-tabs" role="tablist" aria-label="Context tools">
+    <header className="context-panel-header"><div className="context-panel-title"><ActiveIcon size={17} /><h2>{activeDefinition.label}</h2></div><div>{activeTool === 'changes' && <IconButton label={activeTool === 'changes' ? 'Refresh workspace changes' : 'Refresh workspace'} onClick={refreshChanges}><RefreshCw size={15} className={activeTool === 'changes' && changesState === 'loading' ? 'spin' : ''} /></IconButton>}<IconButton label="Close context panel" onClick={onClose}><PanelRightClose size={18} /></IconButton></div></header>
+    <div ref={toolTabs} className="context-tool-tabs" role="tablist" aria-label="Context tools">
       {CONTEXT_TOOLS.map(tool => {
         const Icon = contextToolIcons[tool.id]
         return <button key={tool.id} role="tab" aria-selected={activeTool === tool.id} aria-controls={`context-tool-${tool.id}`} className={activeTool === tool.id ? 'active' : ''} onClick={() => onToolChange(tool.id)} title={`${tool.label} · ${tool.backing}`}><Icon size={15} /><span>{tool.label}</span>{tool.id === 'changes' && <i>{reportedChanges.length}</i>}</button>
@@ -558,11 +558,11 @@ function ContextPanel({ files, demo, events, conversations, currentConversation,
     {activeTool === 'browser' && <BrowserContext key={currentConversation?.id} threadId={demo ? undefined : currentConversation?.id} signal={browserSignal} />}
     {activeTool === 'terminal' && <TerminalContext key={currentConversation?.id ?? 'none'} conversationId={currentConversation?.id} demo={demo} />}
     {activeTool === 'side-chats' && <SideChatsContext conversations={conversations} current={currentConversation} onSelect={onSelectConversation} />}
-    {workspaceActive && <section className="workspace-context" id={`context-tool-${activeTool}`} role="tabpanel" aria-label={activeDefinition.label}>
+    {activeTool === 'explorer' && <WorkspaceFileView key={currentConversation?.id ?? 'workspace'} cwd={currentConversation?.cwd ?? '.'} request={fileRequest} demo={demo} drafts={fileDrafts} setDrafts={setFileDrafts} />}
+    {activeTool === 'changes' && <section className="workspace-context" id={`context-tool-${activeTool}`} role="tabpanel" aria-label={activeDefinition.label}>
       <div className="workspace-path"><FolderOpen size={14} /><span>{activeTool === 'changes' ? changes.repoRoot ? `Changes · ${changes.repoRoot}` : 'Changed files' : 'Workspace root'}</span></div>
       <div className="file-tree" aria-label={activeTool === 'changes' ? 'Workspace changes' : 'Workspace files'}>
-        {activeTool === 'explorer' && treeError && <p className="history-notice" role="alert">{treeError}</p>}
-        {(activeTool === 'explorer' ? tree : reportedChanges).map(file => <FileTreeItem key={file.id} file={file} level={0} activePath={selected?.path ?? null} onSelect={selectFile} onExpand={expandFolder} />)}
+        {reportedChanges.map(file => <FileTreeItem key={file.id} file={file} level={0} activePath={selected?.path ?? null} onSelect={selectFile} onExpand={expandFolder} />)}
         {activeTool === 'changes' && changesState === 'loading' && !reportedChanges.length && <div className="context-empty"><RefreshCw size={23} className="spin" /><strong>Reading Git status</strong><span>Only the selected conversation folder inside the configured workspace is inspected.</span></div>}
         {activeTool === 'changes' && changesState === 'error' && <div className="context-empty error"><AlertCircle size={23} /><strong>Changes unavailable</strong><span>{changesError}</span></div>}
         {activeTool === 'changes' && changesState === 'ready' && !reportedChanges.length && <div className="context-empty"><GitBranch size={24} /><strong>No reported changes</strong><span>The bounded Git adapter reports a clean worktree.</span></div>}
@@ -781,6 +781,13 @@ export default function App() {
   const [launchProjectId, setLaunchProjectId] = useState('')
   const [rightOpen, setRightOpen] = useState(false)
   const [browserSignal, setBrowserSignal] = useState<BrowserSignal | null>(null)
+  const [fileRequest, setFileRequest] = useState<(FileOpenRequest & { chatId: string }) | null>(null)
+  const [fileDrafts, setFileDrafts] = useState<FileDrafts>({})
+  useEffect(() => {
+    const protectDrafts = (event: BeforeUnloadEvent) => { if (Object.values(fileDrafts).some(draft => draft.content !== draft.saved)) { event.preventDefault(); event.returnValue = '' } }
+    window.addEventListener('beforeunload', protectDrafts)
+    return () => window.removeEventListener('beforeunload', protectDrafts)
+  }, [fileDrafts])
   const [activeContextTool, setActiveContextTool] = useState<ContextToolId>(DEFAULT_CONTEXT_TOOL)
 
   useEffect(() => {
@@ -1092,12 +1099,12 @@ export default function App() {
     finally { deleteBusy.current = false; setDeleting(false) }
   }
   const newChat = () => showView('new')
-  return <div className={`app-shell ${rightOpen && activeContextTool === 'browser' ? 'browser-open' : ''} ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
+  return <div className={`app-shell ${rightOpen && activeContextTool === 'browser' ? 'browser-open' : ''} ${rightOpen && activeContextTool === 'explorer' ? 'file-open' : ''} ${leftOpen ? 'left-open' : 'left-closed'} ${rightOpen ? 'right-open' : 'right-closed'}`}>
     {!leftOpen && view !== 'chat' && view !== 'new' && <button className="global-menu icon-button" aria-label="Expand conversations" onClick={openLeft}><Menu size={20} /></button>}
     {leftOpen && <ChatSidebar excludedIds={excludedChats.current} onArchive={archiveChat} onDelete={chat => askDelete({ chat })} onOpenProject={id => { setLaunchProjectId(id); showView('projects') }} view={view} setView={showView} data={data} activeId={activeId} onSelect={selectConversation} onNewProject={() => { showView('projects'); setProjectCreationRequest(value => value + 1) }} onClose={closeLeft} searchRequest={sidebarSearchRequest} onResource={tool => { setActiveContextTool(tool); openRight() }} onPin={async chat => { await pinConversation(chat.id, !chat.pinned); setData(current => current ? { ...current, conversations: current.conversations.some(item => item.id === chat.id) ? current.conversations.map(item => item.id === chat.id ? { ...item, pinned: !chat.pinned } : item) : [...current.conversations, { ...chat, pinned: !chat.pinned }] } : current) }} onNewChat={newChat} historyState={historyState} onRetryHistory={() => { setHistoryState('loading'); setHistoryAttempt(current => current + 1) }} />}
     <div className="mobile-scrim left" onClick={closeLeft} />
     <div className="content-area" inert={leftOpen && isNarrowLayout() ? true : undefined}>
-      {activeConversation && <ChatSurface onBranch={async turnId => { const fork = await forkConversation(activeConversation.id, turnId); selectConversation(fork) }} onOutputs={() => { setActiveContextTool('outputs'); openRight() }} contextOpen={rightOpen} visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} />}
+      {activeConversation && <WorkspaceLinkContext.Provider value={path => { setFileRequest({ path, chatId: activeConversation.id, id: Date.now() }); setActiveContextTool('explorer'); openRight() }}><ChatSurface onBranch={async turnId => { const fork = await forkConversation(activeConversation.id, turnId); selectConversation(fork) }} onOutputs={() => { setActiveContextTool('outputs'); openRight() }} contextOpen={rightOpen} visible={view === 'chat'} key={activeConversation.id} conversation={activeConversation} project={activeProject} projects={data.projects} models={data.models} events={events} turn={turn} historyLoading={historyLoading} connection={connection} realtimeSignal={realtimeSignal} voiceCapability={voiceCapability} setEvents={setEvents} onTurnAction={action => { if (activeIdRef.current === activeConversation.id) setTurn(current => reduceTurnLifecycle(current, action)) }} onConversationStatus={status => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, status } : chat) } : current)} onTurnModel={(model, effort) => { activeModelRef.current = model; activeEffortRef.current = effort }} onAssignProject={projectId => { const previous = activeConversation.projectId; setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId } : chat) } : current); void assignConversationProject(activeConversation.id, projectId).catch(() => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === activeConversation.id ? { ...chat, projectId: previous } : chat) } : current)) }} onRename={title => renameConversationTitle(activeConversation.id, title)} leftOpen={leftOpen} toggleLeft={toggleLeft} openRight={openRight} /></WorkspaceLinkContext.Provider>}
       {view === 'chat' && !activeConversation && <main className="chat-surface"><header className="chat-header"><IconButton label="Expand conversations" onClick={openLeft}><Menu size={20} /></IconButton><span>Codex 2</span><ConnectionPill state={connection} /></header><section className="chat-welcome"><span className="welcome-mark"><Sparkles size={32} /></span><h1>What are we building?</h1><p>Start a conversation in your local workspace.</p><button className="button primary start-chat" onClick={newChat}><Edit3 size={17} />New chat</button></section></main>}
       <LaunchPad visible={view === 'new' || view === 'projects'} projectMode={view === 'projects'} selectedProjectId={data.projects.some(project => project.id === launchProjectId) ? launchProjectId : data.projects[0]?.id} projectControls={view === 'projects' ? <ProjectsPage onDelete={project => askDelete({ project })} createRequest={projectCreationRequest} projects={data.projects} conversations={data.conversations} selectedId={launchProjectId || data.projects[0]?.id || ''} onSelect={setLaunchProjectId} onAdd={project => setData(current => current ? { ...current, projects: [...current.projects, project] } : current)} /> : undefined} onSent={(id, model, effort) => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id ? { ...chat, lastTurnModel: model, lastTurnEffort: effort, model } : chat) } : current)} chats={data.conversations} projects={data.projects} onMenu={openLeft} leftOpen={leftOpen} onSelect={selectConversation} onCreated={chat => { activityRevision.current++; preparing.current.add(chat.id); setData(current => current ? { ...current, conversations: [chat, ...current.conversations.filter(item => item.id !== chat.id)] } : current) }} onPrepared={id => { activityRevision.current++; preparing.current.delete(id) }} onFailed={id => setData(current => current ? { ...current, conversations: current.conversations.map(chat => chat.id === id && chat.status === 'running' ? { ...chat, status: 'failed' } : chat) } : current)} />
       {view === 'new' && !activityConnected && <p className="launch-connection" role="status">Activity connection is reconnecting. Status may be delayed.</p>}
@@ -1107,7 +1114,7 @@ export default function App() {
       {view === 'settings' && <SettingsPage data={data} connection={connection} />}
 
     </div>
-    {rightOpen && <ContextPanel jevState={jevByChat[activeId] ?? EMPTY_JEV_CHAT} onLoadJev={before => { void loadJev(activeId, before) }} browserSignal={browserSignal} files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={closeRight} />}
+    {rightOpen && <ContextPanel fileRequest={fileRequest?.chatId === activeId ? fileRequest : null} fileDrafts={fileDrafts} setFileDrafts={setFileDrafts} jevState={jevByChat[activeId] ?? EMPTY_JEV_CHAT} onLoadJev={before => { void loadJev(activeId, before) }} browserSignal={browserSignal} files={data.files} demo={data.demo} events={events} conversations={data.conversations} currentConversation={activeConversation} activeTool={activeContextTool} onToolChange={setActiveContextTool} onSelectConversation={selectConversation} onClose={closeRight} />}
     {deleteTarget && <Modal title={deleteTarget.chat ? 'Delete chat?' : 'Delete project?'} description={deleteTarget.chat ? `Permanently delete “${deleteTarget.chat.title}” and any chats it spawned. This cannot be undone.` : `Delete “${deleteTarget.project?.name}”? Its chats will be kept under No project. Workspace files will stay on disk.`} onClose={() => { if (!deleteBusy.current) setDeleteTarget(null) }}><div className="modal-form delete-confirmation">{deleteError && <p className="modal-error" role="alert">{deleteError}</p>}<footer><button type="button" autoFocus className="button" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="button destructive-button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? 'Deleting…' : deleteTarget.chat ? 'Delete chat' : 'Delete project'}</button></footer></div></Modal>}
     <div className="mobile-scrim right" onClick={closeRight} />
   </div>

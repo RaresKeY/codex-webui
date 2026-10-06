@@ -1,9 +1,12 @@
-import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useContext, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, WrapText } from 'lucide-react'
 import { InlineImages } from './InlineImages'
 import { imageSource } from './images'
+import { workspaceLink } from './workspace-link'
+import { WorkspaceLinkContext } from './workspace-link-context'
+
 
 function nodeText(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number' || typeof node === 'bigint') return String(node)
@@ -46,7 +49,12 @@ const components: Components = {
 }
 
 export function MarkdownContent({ source, compact = false, cwd }: { source: string; compact?: boolean; cwd?: string }) {
+  const openFile = useContext(WorkspaceLinkContext)
+  const linkedComponents: Components = { ...components, a: ({ href, children, title }) => {
+    const path = href ? workspaceLink(href, cwd) : null
+    return <a href={href} title={title || (path && openFile ? 'Open file in sidebar' : undefined)} target={path && openFile ? undefined : '_blank'} rel="noreferrer noopener" onClick={event => { if (path && openFile && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); openFile(path) } }}>{children}</a>
+  } }
   return <div className={`markdown-content ${compact ? 'compact' : ''}`}>
-    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url, key) => key === 'src' ? imageSource(url, cwd) ?? '' : defaultUrlTransform(url)}>{source}</ReactMarkdown>
+    <ReactMarkdown components={linkedComponents} remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url, key) => key === 'src' ? imageSource(url, cwd) ?? '' : defaultUrlTransform(url)}>{source}</ReactMarkdown>
   </div>
 }

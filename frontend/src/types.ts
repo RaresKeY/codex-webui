@@ -191,6 +191,7 @@ export interface ConversationSnapshot {
 }
 
 export interface FileReadResult {
+  path?: string
   content: string
   error?: string
   demo?: boolean

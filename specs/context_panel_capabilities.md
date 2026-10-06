@@ -18,7 +18,7 @@ Changes to a tool's availability, backing, mutation authority, or Project-inheri
 
 ## Behavior
 
-The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts and remains available from the conversation header. Jev opens explicitly from the sidebar navigation; agent Browser actions select and open Browser automatically. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
+The right side is one collapsible contextual panel with a registry-driven selector. It starts collapsed on desktop and narrow layouts and remains available from the conversation header. Jev is selected through its context tab; agent Browser actions select and open Browser automatically. Chat workspace file links select and open Explorer automatically; its editable file view is documented in `workspace_files.md`. A tool is marked available only when its visible data comes from the public App Server or a bounded localhost companion adapter. A planned entry stays non-interactive and says why; the client does not infer private Codex Desktop APIs.
 
 | Tool | Current state | Backing and boundary |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ The open panel is a flush rectangular app region: no outer gap, radius or floati
 
 See [turn_presentation.md](turn_presentation.md) for the pinned Sources/Outputs card, turn work disclosure, hover timestamps and inclusive native response branching with retained selection/preferences copying.
 
-The default right pane is 440px on wide desktops and 400px below 1280px; Browser retains its wider live-page sizing. The left pane edge is draggable, bounded to preserve conversation space on desktop and viewport width on phones. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to reset the default tool width. Width survives opening/closing within the app session.
+The default right pane is 440px on wide desktops and 400px below 1280px; Browser retains its wider live-page sizing. Explorer uses a wider `clamp(560px, 54vw, 1000px)` default to accommodate the editor and file tree, with a viewport-bounded narrow drawer. File widths also reserve 360px for the desktop conversation. At pane widths below 540px the tree moves below the editor. Tool tabs scroll horizontally without overlapping their labels and keep the selected tool visible. The left pane edge is draggable, bounded to preserve conversation space on desktop and viewport width on phones. The focusable separator supports Arrow keys (16px, Shift 64px), Home/End bounds, and double-click to reset the default tool width. Width survives opening/closing within the app session.
 
 ## Gaps
 

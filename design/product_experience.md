@@ -18,6 +18,8 @@ Command activity uses shared compact disclosure rows, label-adjacent right/down 
 
 The current experimental pane is flush with the app edge, resizable at its left divider and opened through the header control. Jev stays in its sidebar tab. Worked activity uses compact aligned disclosures, and tables offer independent soft wrapping.
 
+Workspace file links open an integrated file pane with a compact tab, breadcrumbs and numbered plain-text editor, with the folder tree alongside on desktop and below on phones. Drafts stay in app memory across pane changes. See `../specs/workspace_files.md` for current limits.
+
 ## Gaps
 
 - Decide user-controlled model overrides only if requested; the current requested flow is automatically routed.
