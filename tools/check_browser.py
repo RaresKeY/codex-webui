@@ -52,7 +52,7 @@ The numbers below are illustrative examples.
 
 | Example outcome | Change after three years | After five years |
 | :--- | ---: | ---: |
-| The starting assumption stays unchanged | **+33%** | **+61%** |
+| The starting assumption stays unchanged long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_ | **+33%** | **+61%** |
 | The starting assumption finishes lower | **+6%** | **+29%** |
 
 > Keep assumptions visible when comparing outcomes.
@@ -62,6 +62,7 @@ Use `total` for the result. [Read the guide](https://example.com/guide).
 ```python
 total = sum(values)
 print(total)
+    # long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_long_token_
 ```
 '''
 
@@ -90,11 +91,15 @@ def check_theme(evaluate, wait, click, viewport, screenshot, bidi, output, basel
                 codeHeader:color('.markdown-code-header','backgroundColor'),inlineCodeBorder:color('.markdown-content p code','borderTopColor'),
                 quoteBorder:color('.markdown-content blockquote','borderLeftColor'),overflow:document.documentElement.scrollWidth>innerWidth,
                 tableWidth:wrap.clientWidth,tableScrollWidth:wrap.scrollWidth,tableScrolls:scrolls,
+                codeWhiteSpace:color('.markdown-code-block code','whiteSpace'),
+                codeWidth:document.querySelector('.markdown-code-block pre').clientWidth,
+                codeScrollWidth:document.querySelector('.markdown-code-block pre').scrollWidth,
                 disabledSend:document.querySelector('[aria-label="Send message"]').disabled};
         })()""")
         assert not colors['overflow'] and colors['disabledSend'], colors
-        if width < 1000:
-            assert colors['tableScrolls'], 'Wide Markdown table must scroll inside its wrapper'
+        if not baseline:
+            assert not colors['tableScrolls'], 'Text tables must soft-wrap without horizontal scrolling'
+            assert colors['codeWhiteSpace'] == 'pre-wrap' and colors['codeScrollWidth'] <= colors['codeWidth'], colors
         def channels(value):
             return [int(channel.strip()) for channel in value.removeprefix('rgb(').removesuffix(')').split(',')]
         def luminance(value):
@@ -118,7 +123,7 @@ def check_theme(evaluate, wait, click, viewport, screenshot, bidi, output, basel
     assert not errors and not Fixtures.calls, (len(errors), Fixtures.calls)
     report = {'syntheticFixtures':True,'baseline':baseline,'measurements':measurements,'uncaughtErrors':len(errors),'modelCalls':0}
     (output / ('before-checks.json' if baseline else 'checks.json')).write_text(json.dumps(report,indent=2)+'\n')
-    print('Theme checks passed at desktop, phone and narrow phone widths: Markdown contrast, table scrolling and copy focus; no model calls.')
+    print('Theme checks passed at desktop, phone and narrow phone widths: Markdown contrast, code/table soft wrapping and copy focus; no model calls.')
 
 
 class Fixtures(SimpleHTTPRequestHandler):

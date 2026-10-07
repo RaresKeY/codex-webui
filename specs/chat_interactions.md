@@ -22,6 +22,8 @@ Before spending on Jev, selected IDs resolve against fresh catalogs and require 
 
 ## Presentation
 
+Markdown code blocks and table cells soft-wrap by default, including long unbroken tokens. Code indentation and explicit line breaks remain preserved; copying retains the original code text.
+
 Jev process details appear only in the contextual sidebar tab, with event-driven stage updates and no timed history refresh. Responses contain no Jev process control. See `jev_activity.md`.
 
 Markdown table and code headers use the sidebar's neutral dark surface. Shared surface, border, text, interaction and semantic colors are centralized in `frontend/src/theme.css`; see `color_theme.md`. Wide tables retain contained horizontal scrolling.
