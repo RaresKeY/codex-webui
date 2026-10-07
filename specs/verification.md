@@ -8,6 +8,11 @@ Visible acceptance checks run the actual production bundle in headless Firefox a
 
 `tools/generate-app-server-schema.sh` generated the public 0.160.0 schema. `ThreadLoadedListResponse.data`, `ThreadSettingsUpdateParams.threadId/model/effort`, its empty-object response, and `TurnStartParams.model/effort/input/threadId` match the adapter. Inherited protocol tests target the adapter subset originally authored for 0.147.0; generated 0.160.0 compatibility does not imply complete protocol coverage.
 
+## Observed results — 2026-10-07
+
+- Integrated the local experimental browser branch into main by fast-forward, retaining browser input, editable workspace files and shared context-pane width. Markdown code blocks and table cells now soft-wrap by default. The production Firefox fixture passed at 1440×1000, 390×844 and 320×640 with long unbroken code/table text, no horizontal text overflow, accessible copy focus and no inference calls.
+- The amd64 runtime build passed 203 backend tests, 109 frontend tests, build/lint/type checks and the native offline lifecycle. Deployed with existing persistent data, private Tailscale settings and browser bridge; local and certificate-validated private HTTPS health and the served soft-wrap bundle passed. The previous deployed runtime remains the single rollback image. Existing user evidence changes were preserved.
+
 ## Observed results — 2026-10-06
 
 Jev information-needs diagnostics and activity passed 173 backend tests and 92 frontend tests, plus frontend build/lint and the native offline lifecycle check in the rebuilt amd64 runtime. The production-bundle Jev browser checks passed at 1440×1000, 390×844, and 320×640 with keyboard/touch navigation, detailed decisions, advisory diagnostics, native turn-status fixtures, pagination/polling, empty/error states, and zero uncaught JavaScript errors. Evidence is in `evidence/ui/jev-activity/`; no paid inference ran.
